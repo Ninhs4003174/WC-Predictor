@@ -2,7 +2,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder
+  EmbedBuilder,
+  StringSelectMenuBuilder
 } from "discord.js";
 
 import {
@@ -12,9 +13,9 @@ import {
 } from "../data/worldCupGroups.js";
 
 import {
-  WORLD_CUP_GROUP_STAGE_SCHEDULE,
-  type ScheduleMatch
-} from "../data/worldCupSchedule.js";
+  getAllScheduleMatchesWithIds,
+  type ScheduleMatchWithId
+} from "./matchScheduleService.js";
 
 const PAGE_SIZE = 6;
 
@@ -28,15 +29,15 @@ function toDiscordTimestamp(kickoffUtc: string) {
   return `<t:${unixSeconds}:f>`;
 }
 
-function formatMatch(match: ScheduleMatch) {
+function formatMatch(match: ScheduleMatchWithId) {
   return [
-    `**Group ${match.group}: ${getTeamDisplayName(match.homeTeam)} vs ${getTeamDisplayName(match.awayTeam)}**`,
+    `**#${match.matchId} — Group ${match.group}: ${getTeamDisplayName(match.homeTeam)} vs ${getTeamDisplayName(match.awayTeam)}**`,
     `${toDiscordTimestamp(match.kickoffUtc)}`,
     `📍 ${match.venue}`
   ].join("\n");
 }
 
-function sortMatches(matches: ScheduleMatch[]) {
+function sortMatches(matches: ScheduleMatchWithId[]) {
   return matches.slice().sort((a, b) => {
     return (
       new Date(a.kickoffUtc).getTime() -
@@ -89,7 +90,7 @@ function getCountryAliases(country: string) {
   return aliases[cleaned] ?? [cleaned];
 }
 
-function countryMatches(match: ScheduleMatch, country: string) {
+function countryMatches(match: ScheduleMatchWithId, country: string) {
   const aliases = getCountryAliases(country);
 
   const homeTeam = cleanText(match.homeTeam);
@@ -106,7 +107,7 @@ function countryMatches(match: ScheduleMatch, country: string) {
 }
 
 function getMatchesForScope(scope: ScheduleScope) {
-  let matches = WORLD_CUP_GROUP_STAGE_SCHEDULE.slice();
+  let matches = getAllScheduleMatchesWithIds();
 
   if (scope.group !== "all") {
     matches = matches.filter(match => {
@@ -156,6 +157,21 @@ export function parseScheduleButtonData(rawGroup: string, rawCountry: string) {
   };
 }
 
+function buildPredictMatchSelectRow(matches: ScheduleMatchWithId[]) {
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId("match_predict_select")
+      .setPlaceholder("Choose a match to predict")
+      .addOptions(
+        matches.map(match => ({
+          label: `#${match.matchId} ${match.homeTeam} vs ${match.awayTeam}`.slice(0, 100),
+          description: `Group ${match.group} • Enter the predicted score`.slice(0, 100),
+          value: match.matchId
+        }))
+      )
+  );
+}
+
 export function buildSchedulePayload(
   page: number,
   scope: ScheduleScope = {
@@ -184,31 +200,45 @@ export function buildSchedulePayload(
     .setTitle(titleParts.join(" — "))
     .setDescription(
       pageMatches.length > 0
-        ? pageMatches.map(formatMatch).join("\n\n")
+        ? [
+            pageMatches.map(formatMatch).join("\n\n"),
+            "",
+            "Use the dropdown below to predict a match score."
+          ].join("\n")
         : "No matches found for that filter."
     )
     .setFooter({
-      text: `Page ${safePage + 1}/${totalPages} • Times are in local timezone`
+      text: `Page ${safePage + 1}/${totalPages} • Times use your Discord local timezone`
     });
+
+  const components = [];
 
   const countryForButton = encodeCountryForButton(scope.country);
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`schedule_page:${scope.group}:${countryForButton}:${safePage - 1}`)
-      .setLabel("Previous")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(safePage === 0),
+  if (totalPages > 1) {
+    const pageRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`schedule_page:${scope.group}:${countryForButton}:${safePage - 1}`)
+        .setLabel("Previous")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(safePage === 0),
 
-    new ButtonBuilder()
-      .setCustomId(`schedule_page:${scope.group}:${countryForButton}:${safePage + 1}`)
-      .setLabel("Next")
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(safePage >= totalPages - 1)
-  );
+      new ButtonBuilder()
+        .setCustomId(`schedule_page:${scope.group}:${countryForButton}:${safePage + 1}`)
+        .setLabel("Next")
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(safePage >= totalPages - 1)
+    );
+
+    components.push(pageRow);
+  }
+
+  if (pageMatches.length > 0) {
+    components.push(buildPredictMatchSelectRow(pageMatches));
+  }
 
   return {
     embeds: [embed],
-    components: totalPages > 1 ? [row] : []
+    components
   };
 }
