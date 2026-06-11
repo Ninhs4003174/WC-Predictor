@@ -28,8 +28,21 @@ function canSendToChannel(channel: unknown): channel is SendableDiscordChannel {
   );
 }
 
+function isLive(match: ParsedEspnMatch) {
+  return match.statusState === "in" && !match.completed;
+}
+
 function isHalfTime(status: string) {
   return /half/i.test(status);
+}
+
+function isOneHourBeforeKickoff(kickoffUtc: string) {
+  const kickoffTime = new Date(kickoffUtc).getTime();
+  const now = Date.now();
+
+  const minutesUntilKickoff = (kickoffTime - now) / 1000 / 60;
+
+  return minutesUntilKickoff <= 65 && minutesUntilKickoff >= 55;
 }
 
 function goalKey(goal: ParsedEspnGoal) {
@@ -64,6 +77,44 @@ async function sendToResultsChannel(
   await channel.send({
     embeds: [embed]
   });
+}
+
+function buildOneHourAlertEmbed(match: ParsedEspnMatch) {
+  const kickoffUnix = Math.floor(new Date(match.kickoffUtc).getTime() / 1000);
+
+  return new EmbedBuilder()
+    .setTitle("⏰ Match starts in 1 hour")
+    .setDescription(
+      [
+        `**${match.homeTeam} vs ${match.awayTeam}**`,
+        "",
+        `Kickoff: <t:${kickoffUnix}:F>`,
+        `Relative: <t:${kickoffUnix}:R>`,
+        "",
+        "Get your predictions in before the match starts."
+      ].join("\n")
+    )
+    .setFooter({
+      text: `ESPN ID: ${match.espnId}`
+    })
+    .setTimestamp();
+}
+
+function buildMatchStartEmbed(match: ParsedEspnMatch) {
+  return new EmbedBuilder()
+    .setTitle("🟢 Match Started")
+    .setDescription(
+      [
+        `**${match.homeTeam} vs ${match.awayTeam}**`,
+        "",
+        `Current score: **${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`,
+        `Status: **${match.status}**`
+      ].join("\n")
+    )
+    .setFooter({
+      text: `ESPN ID: ${match.espnId}`
+    })
+    .setTimestamp();
 }
 
 function buildGoalEmbed(match: ParsedEspnMatch, goal: ParsedEspnGoal) {
@@ -136,6 +187,8 @@ async function createInitialState(match: ParsedEspnMatch) {
         postedGoalKeys: match.statusState === "pre"
           ? []
           : match.goals.map(goalKey),
+        oneHourAlertPosted: false,
+        matchStartPosted: false,
         halfTimePosted: isHalfTime(match.status),
         fullTimePosted: match.completed
       }
@@ -147,13 +200,40 @@ async function createInitialState(match: ParsedEspnMatch) {
 }
 
 async function processMatch(client: Client, match: ParsedEspnMatch) {
-  const state = await EspnLiveState.findOne({
+  let state = await EspnLiveState.findOne({
     espnId: match.espnId
   });
 
   if (!state) {
     await createInitialState(match);
-    return;
+
+    state = await EspnLiveState.findOne({
+      espnId: match.espnId
+    });
+
+    if (!state) {
+      return;
+    }
+  }
+
+  const shouldPostOneHourAlert =
+    match.statusState === "pre" &&
+    !state.oneHourAlertPosted &&
+    isOneHourBeforeKickoff(match.kickoffUtc);
+
+  if (shouldPostOneHourAlert) {
+    await sendToResultsChannel(client, buildOneHourAlertEmbed(match));
+    state.oneHourAlertPosted = true;
+  }
+
+  const shouldPostMatchStart =
+    isLive(match) &&
+    !isHalfTime(match.status) &&
+    !state.matchStartPosted;
+
+  if (shouldPostMatchStart) {
+    await sendToResultsChannel(client, buildMatchStartEmbed(match));
+    state.matchStartPosted = true;
   }
 
   const postedGoalKeys = new Set(state.postedGoalKeys);
