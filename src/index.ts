@@ -10,6 +10,7 @@ import { connectDatabase } from "./config/database.js";
 import { commandMap } from "./commands/index.js";
 import { handlePlayInteraction } from "./events/interactionCreate.js";
 import { handleScheduleInteraction } from "./events/scheduleInteraction.js";
+import { startEspnLiveWatcher } from "./services/espnLiveWatcher.js";
 
 const client = new Client({
   intents: [
@@ -19,6 +20,8 @@ const client = new Client({
 
 client.once(Events.ClientReady, readyClient => {
   console.log(`✅ Logged in as ${readyClient.user.tag}`);
+
+  startEspnLiveWatcher(client);
 });
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
