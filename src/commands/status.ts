@@ -1,5 +1,9 @@
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChatInputCommandInteraction,
+  ComponentType,
   EmbedBuilder,
   SlashCommandBuilder
 } from "discord.js";
@@ -17,6 +21,8 @@ import {
 } from "../models/WorldCupPrediction.js";
 
 import { getAllScheduleMatchesWithIds } from "../services/matchScheduleService.js";
+
+const PAGE_SIZE = 10;
 
 export const data = new SlashCommandBuilder()
   .setName("status")
@@ -49,6 +55,11 @@ type PredictionMapLike =
   | Record<string, string[]>
   | undefined;
 
+type StatusPagePayload = {
+  embed: EmbedBuilder;
+  totalPages: number;
+};
+
 function getGroupPicks(
   predictions: PredictionMapLike,
   group: GroupKey
@@ -72,15 +83,32 @@ function countCompletedGroups(prediction: IWorldCupPrediction) {
   }, 0);
 }
 
-function truncateText(text: string, maxLength = 1000) {
-  if (text.length <= maxLength) {
-    return text;
-  }
+function buildPageButtons(page: number, totalPages: number) {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId("status_previous")
+      .setLabel("Previous")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page <= 0),
 
-  return `${text.slice(0, maxLength - 30)}\n...and more`;
+    new ButtonBuilder()
+      .setCustomId("status_next")
+      .setLabel("Next")
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(page >= totalPages - 1)
+  );
 }
 
-async function buildGroupStatusEmbed(guildId: string) {
+function getPageSlice<T>(items: T[], page: number) {
+  const start = page * PAGE_SIZE;
+
+  return items.slice(start, start + PAGE_SIZE);
+}
+
+async function buildGroupStatusPage(
+  guildId: string,
+  page: number
+): Promise<StatusPagePayload> {
   const groupPredictionDocs = await WorldCupPrediction.find({
     guildId
   });
@@ -97,10 +125,17 @@ async function buildGroupStatusEmbed(guildId: string) {
       };
     })
     .filter(user => user.completedGroups > 0)
-    .sort((a, b) => b.completedGroups - a.completedGroups);
+    .sort((a, b) => {
+      if (b.completedGroups !== a.completedGroups) {
+        return b.completedGroups - a.completedGroups;
+      }
+
+      return a.userId.localeCompare(b.userId);
+    });
 
   const totalEntrants = userProgress.length;
-  const completedEntries = userProgress.filter(user => user.completed).length;
+  const completedUsers = userProgress.filter(user => user.completed);
+  const inProgressUsers = userProgress.filter(user => !user.completed);
 
   const totalGroupSubmissions = userProgress.reduce((total, user) => {
     return total + user.completedGroups;
@@ -120,28 +155,34 @@ async function buildGroupStatusEmbed(guildId: string) {
       return picks && picks.length === 4;
     }).length;
 
-    return `**${group}:** ${count}`;
+    return `**${group}:** ${count}/${totalEntrants}`;
   }).join(" • ");
 
+  const totalPages = Math.max(1, Math.ceil(userProgress.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+  const pageUsers = getPageSlice(userProgress, safePage);
+
   const userList =
-    userProgress.length === 0
+    pageUsers.length === 0
       ? "No group predictions submitted yet."
-      : userProgress
-          .map(user => {
+      : pageUsers
+          .map((user, index) => {
+            const rank = safePage * PAGE_SIZE + index + 1;
             const status = user.completed ? "✅ complete" : "🟡 in progress";
 
-            return `<@${user.userId}> \`${user.userId}\` — **${user.completedGroups}/${GROUP_ORDER.length}** groups ${status}`;
+            return `**${rank}.** <@${user.userId}> \`${user.userId}\` — **${user.completedGroups}/${GROUP_ORDER.length}** groups ${status}`;
           })
           .join("\n");
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setTitle("🌍 Group Prediction Status")
     .setDescription(
       [
         "A user counts as **entered** once they submit at least one group.",
         "",
-        `👥 **Entrants:** ${totalEntrants}`,
-        `✅ **Completed Entries:** ${completedEntries}`,
+        `👥 **Total Entrants:** ${totalEntrants}`,
+        `✅ **Completed Entries:** ${completedUsers.length}`,
+        `🟡 **In Progress:** ${inProgressUsers.length}`,
         `🌍 **Groups Submitted:** ${totalGroupSubmissions}/${maxPossibleGroupSubmissions}`,
         `📊 **Overall Completion:** ${completionPercent}%`
       ].join("\n")
@@ -153,8 +194,8 @@ async function buildGroupStatusEmbed(guildId: string) {
         inline: false
       },
       {
-        name: "👤 Users / User IDs",
-        value: truncateText(userList),
+        name: `👤 Users / User IDs — Page ${safePage + 1}/${totalPages}`,
+        value: userList,
         inline: false
       }
     )
@@ -162,9 +203,17 @@ async function buildGroupStatusEmbed(guildId: string) {
       text: "Group predictions count once a group is submitted"
     })
     .setTimestamp();
+
+  return {
+    embed,
+    totalPages
+  };
 }
 
-async function buildMatchStatusEmbed(guildId: string) {
+async function buildMatchStatusPage(
+  guildId: string,
+  page: number
+): Promise<StatusPagePayload> {
   const totalMatches = getAllScheduleMatchesWithIds().length;
 
   const [
@@ -190,7 +239,8 @@ async function buildMatchStatusEmbed(guildId: string) {
       },
       {
         $sort: {
-          predictions: -1
+          predictions: -1,
+          _id: 1
         }
       }
     ])
@@ -203,16 +253,22 @@ async function buildMatchStatusEmbed(guildId: string) {
       ? "0.0"
       : (totalPredictions / totalEntrants).toFixed(1);
 
+  const totalPages = Math.max(1, Math.ceil(userStats.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+  const pageUsers = getPageSlice(userStats, safePage);
+
   const userList =
-    userStats.length === 0
+    pageUsers.length === 0
       ? "No match predictions submitted yet."
-      : userStats
-          .map(user => {
-            return `<@${user._id}> \`${user._id}\` — **${user.predictions}** match predictions`;
+      : pageUsers
+          .map((user, index) => {
+            const rank = safePage * PAGE_SIZE + index + 1;
+
+            return `**${rank}.** <@${user._id}> \`${user._id}\` — **${user.predictions}** match predictions`;
           })
           .join("\n");
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setTitle("⚽ Match Prediction Status")
     .setDescription(
       [
@@ -225,14 +281,31 @@ async function buildMatchStatusEmbed(guildId: string) {
       ].join("\n")
     )
     .addFields({
-      name: "👤 Users / User IDs",
-      value: truncateText(userList),
+      name: `👤 Users / User IDs — Page ${safePage + 1}/${totalPages}`,
+      value: userList,
       inline: false
     })
     .setFooter({
       text: "Match predictions count once a match score is submitted"
     })
     .setTimestamp();
+
+  return {
+    embed,
+    totalPages
+  };
+}
+
+async function buildStatusPage(
+  type: string,
+  guildId: string,
+  page: number
+) {
+  if (type === "group") {
+    return buildGroupStatusPage(guildId, page);
+  }
+
+  return buildMatchStatusPage(guildId, page);
 }
 
 export async function execute(interaction: ChatInputCommandInteraction) {
@@ -247,16 +320,75 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const type = interaction.options.getString("type", true);
   const showPublic = interaction.options.getBoolean("public") ?? false;
 
+  let page = 0;
+
   await interaction.deferReply({
     ephemeral: !showPublic
   });
 
-  const embed =
-    type === "group"
-      ? await buildGroupStatusEmbed(interaction.guildId)
-      : await buildMatchStatusEmbed(interaction.guildId);
+  const firstPayload = await buildStatusPage(
+    type,
+    interaction.guildId,
+    page
+  );
 
-  await interaction.editReply({
-    embeds: [embed]
+  const message = await interaction.editReply({
+    embeds: [firstPayload.embed],
+    components: firstPayload.totalPages > 1
+      ? [buildPageButtons(page, firstPayload.totalPages)]
+      : []
+  });
+
+  if (firstPayload.totalPages <= 1) {
+    return;
+  }
+
+  const collector = message.createMessageComponentCollector({
+    componentType: ComponentType.Button,
+    time: 5 * 60 * 1000
+  });
+
+  collector.on("collect", async buttonInteraction => {
+    if (buttonInteraction.user.id !== interaction.user.id) {
+      await buttonInteraction.reply({
+        content: "Only the person who ran this command can use these buttons.",
+        ephemeral: true
+      });
+      return;
+    }
+
+    if (buttonInteraction.customId === "status_previous") {
+      page -= 1;
+    }
+
+    if (buttonInteraction.customId === "status_next") {
+      page += 1;
+    }
+
+    const payload = await buildStatusPage(
+      type,
+      interaction.guildId!,
+      page
+    );
+
+    const safePage = Math.min(Math.max(page, 0), payload.totalPages - 1);
+    page = safePage;
+
+    await buttonInteraction.update({
+      embeds: [payload.embed],
+      components: payload.totalPages > 1
+        ? [buildPageButtons(page, payload.totalPages)]
+        : []
+    });
+  });
+
+  collector.on("end", async () => {
+    try {
+      await interaction.editReply({
+        components: []
+      });
+    } catch {
+      // Ignore if the message can no longer be edited.
+    }
   });
 }
