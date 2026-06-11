@@ -11,7 +11,7 @@ import {
 
 import { EspnLiveState } from "../models/EspnLiveState.js";
 
-const CHECK_INTERVAL_MS = 3 * 60 * 1000;
+const CHECK_INTERVAL_MS = 1 * 60 * 1000;
 
 let watcherStarted = false;
 
@@ -56,6 +56,26 @@ function goalKey(goal: ParsedEspnGoal) {
   ].join("|");
 }
 
+function parseGoalKey(key: string) {
+  const [
+    minute,
+    scorer,
+    teamName,
+    type,
+    ownGoal,
+    penalty
+  ] = key.split("|");
+
+  return {
+    minute: minute || "?",
+    scorer: scorer || "Unknown scorer",
+    teamName: teamName || "Unknown team",
+    type: type || "Goal",
+    ownGoal: ownGoal === "OG",
+    penalty: penalty === "PEN"
+  };
+}
+
 async function sendToResultsChannel(
   client: Client,
   embed: EmbedBuilder
@@ -93,11 +113,7 @@ function buildOneHourAlertEmbed(match: ParsedEspnMatch) {
         "",
         "Get your predictions in before the match starts."
       ].join("\n")
-    )
-    .setFooter({
-      text: `ESPN ID: ${match.espnId}`
-    })
-    .setTimestamp();
+    );
 }
 
 function buildMatchStartEmbed(match: ParsedEspnMatch) {
@@ -107,14 +123,9 @@ function buildMatchStartEmbed(match: ParsedEspnMatch) {
       [
         `**${match.homeTeam} vs ${match.awayTeam}**`,
         "",
-        `Current score: **${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`,
-        `Status: **${match.status}**`
+        `Current score: **${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`
       ].join("\n")
-    )
-    .setFooter({
-      text: `ESPN ID: ${match.espnId}`
-    })
-    .setTimestamp();
+    );
 }
 
 function buildGoalEmbed(match: ParsedEspnMatch, goal: ParsedEspnGoal) {
@@ -136,11 +147,53 @@ function buildGoalEmbed(match: ParsedEspnMatch, goal: ParsedEspnGoal) {
         `**${goal.minute}** — ${goal.scorer}${tagText}`,
         `Team: **${goal.teamName}**`
       ].join("\n")
-    )
-    .setFooter({
-      text: `ESPN ID: ${match.espnId}`
-    })
-    .setTimestamp();
+    );
+}
+
+function buildGoalDisallowedEmbed(
+  match: ParsedEspnMatch,
+  removedGoalKey: string
+) {
+  const removedGoal = parseGoalKey(removedGoalKey);
+
+  const tags = [];
+
+  if (removedGoal.penalty) tags.push("PEN");
+  if (removedGoal.ownGoal) tags.push("OG");
+
+  const tagText = tags.length > 0
+    ? ` (${tags.join(", ")})`
+    : "";
+
+  return new EmbedBuilder()
+    .setTitle("🚫 Goal disallowed")
+    .setDescription(
+      [
+        `**${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`,
+        "",
+        "A previously posted goal appears to have been removed after review.",
+        "",
+        `Removed goal: **${removedGoal.minute}** — ${removedGoal.scorer}${tagText}`,
+        `Team: **${removedGoal.teamName}**`
+      ].join("\n")
+    );
+}
+
+function buildScoreCorrectionEmbed(
+  match: ParsedEspnMatch,
+  oldHomeScore: number,
+  oldAwayScore: number
+) {
+  return new EmbedBuilder()
+    .setTitle("🚫 Score corrected")
+    .setDescription(
+      [
+        "Possible VAR/disallowed goal update.",
+        "",
+        `Previous score: **${match.homeTeam} ${oldHomeScore} - ${oldAwayScore} ${match.awayTeam}**`,
+        `Current score: **${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`
+      ].join("\n")
+    );
 }
 
 function buildHalfTimeEmbed(match: ParsedEspnMatch) {
@@ -148,11 +201,7 @@ function buildHalfTimeEmbed(match: ParsedEspnMatch) {
     .setTitle("⏸️ Half-time")
     .setDescription(
       `**${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`
-    )
-    .setFooter({
-      text: `ESPN ID: ${match.espnId}`
-    })
-    .setTimestamp();
+    );
 }
 
 function buildFullTimeEmbed(match: ParsedEspnMatch) {
@@ -164,11 +213,7 @@ function buildFullTimeEmbed(match: ParsedEspnMatch) {
         "",
         "Match complete."
       ].join("\n")
-    )
-    .setFooter({
-      text: `ESPN ID: ${match.espnId}`
-    })
-    .setTimestamp();
+    );
 }
 
 async function createInitialState(match: ParsedEspnMatch) {
@@ -187,6 +232,8 @@ async function createInitialState(match: ParsedEspnMatch) {
         postedGoalKeys: match.statusState === "pre"
           ? []
           : match.goals.map(goalKey),
+        disallowedGoalKeys: [],
+        postedVarKeys: [],
         oneHourAlertPosted: false,
         matchStartPosted: false,
         halfTimePosted: isHalfTime(match.status),
@@ -236,7 +283,49 @@ async function processMatch(client: Client, match: ParsedEspnMatch) {
     state.matchStartPosted = true;
   }
 
-  const postedGoalKeys = new Set(state.postedGoalKeys);
+  const postedGoalKeys = new Set(state.postedGoalKeys ?? []);
+  const currentGoalKeys = new Set(match.goals.map(goalKey));
+  const disallowedGoalKeys = new Set(state.disallowedGoalKeys ?? []);
+  const postedVarKeys = new Set(state.postedVarKeys ?? []);
+
+  for (const oldGoalKey of postedGoalKeys) {
+    const goalNoLongerExists = !currentGoalKeys.has(oldGoalKey);
+
+    if (goalNoLongerExists && !disallowedGoalKeys.has(oldGoalKey)) {
+      await sendToResultsChannel(
+        client,
+        buildGoalDisallowedEmbed(match, oldGoalKey)
+      );
+
+      disallowedGoalKeys.add(oldGoalKey);
+    }
+  }
+
+  const scoreWentBackwards =
+    match.homeScore < state.lastHomeScore ||
+    match.awayScore < state.lastAwayScore;
+
+  if (scoreWentBackwards) {
+    const correctionKey = [
+      state.lastHomeScore,
+      state.lastAwayScore,
+      match.homeScore,
+      match.awayScore
+    ].join("-");
+
+    if (!postedVarKeys.has(correctionKey)) {
+      await sendToResultsChannel(
+        client,
+        buildScoreCorrectionEmbed(
+          match,
+          state.lastHomeScore,
+          state.lastAwayScore
+        )
+      );
+
+      postedVarKeys.add(correctionKey);
+    }
+  }
 
   for (const goal of match.goals) {
     const key = goalKey(goal);
@@ -269,6 +358,8 @@ async function processMatch(client: Client, match: ParsedEspnMatch) {
   state.lastHomeScore = match.homeScore;
   state.lastAwayScore = match.awayScore;
   state.postedGoalKeys = Array.from(postedGoalKeys);
+  state.disallowedGoalKeys = Array.from(disallowedGoalKeys);
+  state.postedVarKeys = Array.from(postedVarKeys);
 
   await state.save();
 }
