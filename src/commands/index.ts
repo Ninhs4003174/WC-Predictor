@@ -13,6 +13,7 @@ import * as lockpicks from "./lockpicks.js";
 import * as unlockpicks from "./unlockpicks.js";
 import * as lockmatch from "./lockmatch.js";
 import * as unlockmatch from "./unlockmatch.js";
+import * as espncheck from "./espncheck.js";
 import * as status from "./status.js";
 import * as help from "./help.js";
 
@@ -31,6 +32,7 @@ export const commands: BotCommand[] = [
   unlockpicks,
   lockmatch,
   unlockmatch,
+  espncheck,
   status,
   help
 ];
