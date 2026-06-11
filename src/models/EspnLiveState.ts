@@ -8,6 +8,8 @@ export interface IEspnLiveState {
   lastHomeScore: number;
   lastAwayScore: number;
   postedGoalKeys: string[];
+  disallowedGoalKeys: string[];
+  postedVarKeys: string[];
   oneHourAlertPosted: boolean;
   matchStartPosted: boolean;
   halfTimePosted: boolean;
@@ -48,6 +50,16 @@ const EspnLiveStateSchema = new Schema<IEspnLiveState>(
     },
 
     postedGoalKeys: {
+      type: [String],
+      default: []
+    },
+
+    disallowedGoalKeys: {
+      type: [String],
+      default: []
+    },
+
+    postedVarKeys: {
       type: [String],
       default: []
     },
