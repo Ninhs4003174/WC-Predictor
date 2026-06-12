@@ -28,12 +28,24 @@ function canSendToChannel(channel: unknown): channel is SendableDiscordChannel {
   );
 }
 
+function normaliseStatus(status: string) {
+  return status
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
 function isLive(match: ParsedEspnMatch) {
   return match.statusState === "in" && !match.completed;
 }
 
 function isHalfTime(status: string) {
-  return /half/i.test(status);
+  const normalised = normaliseStatus(status);
+
+  return (
+    normalised === "ht" ||
+    normalised === "halftime" ||
+    normalised.includes("half")
+  );
 }
 
 function isOneHourBeforeKickoff(kickoffUtc: string) {
@@ -154,9 +166,7 @@ function buildOneHourAlertEmbed(match: ParsedEspnMatch) {
         `**${match.homeTeam} vs ${match.awayTeam}**`,
         "",
         `Kickoff: <t:${kickoffUnix}:F>`,
-        `Relative: <t:${kickoffUnix}:R>`,
-        "",
-        "Get your predictions in before the match starts."
+        `Relative: <t:${kickoffUnix}:R>`
       ].join("\n")
     );
 }
@@ -283,7 +293,7 @@ async function createInitialState(match: ParsedEspnMatch) {
         postedVarKeys: [],
         oneHourAlertPosted: false,
         matchStartPosted: false,
-        halfTimePosted: isHalfTime(match.status),
+        halfTimePosted: false,
         fullTimePosted: match.completed
       }
     },
