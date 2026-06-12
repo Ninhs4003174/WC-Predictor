@@ -5,6 +5,7 @@ import {
 
 import {
   fetchEspnScoreboard,
+  type ParsedEspnCard,
   type ParsedEspnGoal,
   type ParsedEspnMatch
 } from "./espnSoccerService.js";
@@ -73,6 +74,15 @@ function goalKey(goal: ParsedEspnGoal) {
   ].join("|");
 }
 
+function redCardKey(card: ParsedEspnCard) {
+  return [
+    card.minute,
+    card.player,
+    card.teamName,
+    card.type
+  ].join("|");
+}
+
 function parseGoalKey(key: string) {
   const [
     minute,
@@ -138,6 +148,43 @@ function getScoreAfterGoal(
   return `${match.homeTeam} ${homeScore} - ${awayScore} ${match.awayTeam}`;
 }
 
+function formatGoal(goal: ParsedEspnGoal) {
+  const tags = [];
+
+  if (goal.penalty) tags.push("PEN");
+  if (goal.ownGoal) tags.push("OG");
+
+  const tagText = tags.length > 0
+    ? ` (${tags.join(", ")})`
+    : "";
+
+  return `⚽ **${goal.minute}** — ${goal.scorer}${tagText} • ${goal.teamName}`;
+}
+
+function formatRedCard(card: ParsedEspnCard) {
+  return `🟥 **${card.minute}** — ${card.player} • ${card.teamName}`;
+}
+
+function formatFullTimeGoals(match: ParsedEspnMatch) {
+  if (match.goals.length === 0) {
+    return "No goals.";
+  }
+
+  return match.goals
+    .map(formatGoal)
+    .join("\n");
+}
+
+function formatFullTimeRedCards(match: ParsedEspnMatch) {
+  if (match.redCards.length === 0) {
+    return "No red cards.";
+  }
+
+  return match.redCards
+    .map(formatRedCard)
+    .join("\n");
+}
+
 function getNextScheduledMatch(match: ParsedEspnMatch): ScheduleMatch | undefined {
   const currentKickoffTime = new Date(match.kickoffUtc).getTime();
 
@@ -168,8 +215,7 @@ function buildNextMatchText(match: ParsedEspnMatch) {
   return [
     `**${nextMatch.homeTeam} vs ${nextMatch.awayTeam}**`,
     `Group ${nextMatch.group} • ${nextMatch.venue}`,
-    `Kickoff: <t:${kickoffUnix}:F>`,
-    `Relative: <t:${kickoffUnix}:R>`
+    `Kickoff: <t:${kickoffUnix}:F>`
   ].join("\n");
 }
 
@@ -205,8 +251,7 @@ function buildOneHourAlertEmbed(match: ParsedEspnMatch) {
       [
         `**${match.homeTeam} vs ${match.awayTeam}**`,
         "",
-        `Kickoff: <t:${kickoffUnix}:F>`,
-        `Relative: <t:${kickoffUnix}:R>`
+        `Kickoff: <t:${kickoffUnix}:F>`
       ].join("\n")
     );
 }
@@ -224,15 +269,6 @@ function buildMatchStartEmbed(match: ParsedEspnMatch) {
 }
 
 function buildGoalEmbed(match: ParsedEspnMatch, goal: ParsedEspnGoal) {
-  const tags = [];
-
-  if (goal.penalty) tags.push("PEN");
-  if (goal.ownGoal) tags.push("OG");
-
-  const tagText = tags.length > 0
-    ? ` (${tags.join(", ")})`
-    : "";
-
   const scoreLine = getScoreAfterGoal(match, goal);
 
   return new EmbedBuilder()
@@ -241,8 +277,19 @@ function buildGoalEmbed(match: ParsedEspnMatch, goal: ParsedEspnGoal) {
       [
         `**${scoreLine}**`,
         "",
-        `**${goal.minute}** — ${goal.scorer}${tagText}`,
-        `Team: **${goal.teamName}**`
+        formatGoal(goal)
+      ].join("\n")
+    );
+}
+
+function buildRedCardEmbed(match: ParsedEspnMatch, card: ParsedEspnCard) {
+  return new EmbedBuilder()
+    .setTitle("🟥 Red Card")
+    .setDescription(
+      [
+        `**${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`,
+        "",
+        formatRedCard(card)
       ].join("\n")
     );
 }
@@ -308,7 +355,11 @@ function buildFullTimeEmbed(match: ParsedEspnMatch) {
       [
         `**${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`,
         "",
-        "Match complete.",
+        "## ⚽ Goals",
+        formatFullTimeGoals(match),
+        "",
+        "## 🟥 Red Cards",
+        formatFullTimeRedCards(match),
         "",
         "## ⏭️ Next Match",
         buildNextMatchText(match)
@@ -332,6 +383,9 @@ async function createInitialState(match: ParsedEspnMatch) {
         postedGoalKeys: match.statusState === "pre"
           ? []
           : match.goals.map(goalKey),
+        postedRedCardKeys: match.statusState === "pre"
+          ? []
+          : match.redCards.map(redCardKey),
         disallowedGoalKeys: [],
         postedVarKeys: [],
         oneHourAlertPosted: false,
@@ -384,6 +438,7 @@ async function processMatch(client: Client, match: ParsedEspnMatch) {
   }
 
   const postedGoalKeys = new Set(state.postedGoalKeys ?? []);
+  const postedRedCardKeys = new Set(state.postedRedCardKeys ?? []);
   const currentGoalKeys = new Set(match.goals.map(goalKey));
   const disallowedGoalKeys = new Set(state.disallowedGoalKeys ?? []);
   const postedVarKeys = new Set(state.postedVarKeys ?? []);
@@ -436,6 +491,15 @@ async function processMatch(client: Client, match: ParsedEspnMatch) {
     }
   }
 
+  for (const redCard of match.redCards) {
+    const key = redCardKey(redCard);
+
+    if (!postedRedCardKeys.has(key)) {
+      await sendToResultsChannel(client, buildRedCardEmbed(match, redCard));
+      postedRedCardKeys.add(key);
+    }
+  }
+
   const shouldPostHalfTime =
     isHalfTime(match.status) &&
     !state.halfTimePosted;
@@ -458,6 +522,7 @@ async function processMatch(client: Client, match: ParsedEspnMatch) {
   state.lastHomeScore = match.homeScore;
   state.lastAwayScore = match.awayScore;
   state.postedGoalKeys = Array.from(postedGoalKeys);
+  state.postedRedCardKeys = Array.from(postedRedCardKeys);
   state.disallowedGoalKeys = Array.from(disallowedGoalKeys);
   state.postedVarKeys = Array.from(postedVarKeys);
 

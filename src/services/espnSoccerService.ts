@@ -5,6 +5,8 @@ type EspnAthlete = {
 type EspnDetail = {
   type?: {
     text?: string;
+    displayName?: string;
+    name?: string;
   };
   clock?: {
     displayValue?: string;
@@ -66,6 +68,13 @@ export type ParsedEspnGoal = {
   penalty: boolean;
 };
 
+export type ParsedEspnCard = {
+  minute: string;
+  player: string;
+  teamName: string;
+  type: string;
+};
+
 export type ParsedEspnMatch = {
   espnId: string;
   name: string;
@@ -79,6 +88,7 @@ export type ParsedEspnMatch = {
   homeScore: number;
   awayScore: number;
   goals: ParsedEspnGoal[];
+  redCards: ParsedEspnCard[];
 };
 
 function getTeamNameById(competition: EspnCompetition, teamId?: string) {
@@ -93,6 +103,13 @@ function getTeamNameById(competition: EspnCompetition, teamId?: string) {
     "Unknown team";
 }
 
+function getDetailTypeText(detail: EspnDetail) {
+  return detail.type?.text ??
+    detail.type?.displayName ??
+    detail.type?.name ??
+    "";
+}
+
 function parseGoals(competition: EspnCompetition): ParsedEspnGoal[] {
   const details = competition.details ?? [];
 
@@ -103,9 +120,36 @@ function parseGoals(competition: EspnCompetition): ParsedEspnGoal[] {
         minute: detail.clock?.displayValue ?? "?",
         scorer: detail.athletesInvolved?.[0]?.displayName ?? "Unknown scorer",
         teamName: getTeamNameById(competition, detail.team?.id),
-        type: detail.type?.text ?? "Goal",
+        type: getDetailTypeText(detail) || "Goal",
         ownGoal: Boolean(detail.ownGoal),
         penalty: Boolean(detail.penaltyKick)
+      };
+    });
+}
+
+function isRedCardDetail(detail: EspnDetail) {
+  const typeText = getDetailTypeText(detail)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+  return (
+    typeText.includes("redcard") ||
+    typeText.includes("secondyellow") ||
+    typeText.includes("2ndyellow")
+  );
+}
+
+function parseRedCards(competition: EspnCompetition): ParsedEspnCard[] {
+  const details = competition.details ?? [];
+
+  return details
+    .filter(isRedCardDetail)
+    .map(detail => {
+      return {
+        minute: detail.clock?.displayValue ?? "?",
+        player: detail.athletesInvolved?.[0]?.displayName ?? "Unknown player",
+        teamName: getTeamNameById(competition, detail.team?.id),
+        type: getDetailTypeText(detail) || "Red Card"
       };
     });
 }
@@ -141,7 +185,8 @@ function parseMatch(event: EspnEvent): ParsedEspnMatch | null {
     awayTeam: away.team.shortDisplayName ?? away.team.displayName,
     homeScore: Number(home.score),
     awayScore: Number(away.score),
-    goals: parseGoals(competition)
+    goals: parseGoals(competition),
+    redCards: parseRedCards(competition)
   };
 }
 
