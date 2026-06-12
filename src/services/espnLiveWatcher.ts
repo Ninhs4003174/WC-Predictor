@@ -9,6 +9,11 @@ import {
   type ParsedEspnMatch
 } from "./espnSoccerService.js";
 
+import {
+  WORLD_CUP_GROUP_STAGE_SCHEDULE,
+  type ScheduleMatch
+} from "../data/worldCupSchedule.js";
+
 import { EspnLiveState } from "../models/EspnLiveState.js";
 
 const CHECK_INTERVAL_MS = 1 * 60 * 1000;
@@ -131,6 +136,41 @@ function getScoreAfterGoal(
   }
 
   return `${match.homeTeam} ${homeScore} - ${awayScore} ${match.awayTeam}`;
+}
+
+function getNextScheduledMatch(match: ParsedEspnMatch): ScheduleMatch | undefined {
+  const currentKickoffTime = new Date(match.kickoffUtc).getTime();
+
+  const safeReferenceTime = Number.isNaN(currentKickoffTime)
+    ? Date.now()
+    : currentKickoffTime;
+
+  return WORLD_CUP_GROUP_STAGE_SCHEDULE
+    .filter(scheduledMatch => {
+      const scheduledKickoffTime = new Date(scheduledMatch.kickoffUtc).getTime();
+
+      return scheduledKickoffTime > safeReferenceTime;
+    })
+    .sort((a, b) => {
+      return new Date(a.kickoffUtc).getTime() - new Date(b.kickoffUtc).getTime();
+    })[0];
+}
+
+function buildNextMatchText(match: ParsedEspnMatch) {
+  const nextMatch = getNextScheduledMatch(match);
+
+  if (!nextMatch) {
+    return "No upcoming group stage match found.";
+  }
+
+  const kickoffUnix = Math.floor(new Date(nextMatch.kickoffUtc).getTime() / 1000);
+
+  return [
+    `**${nextMatch.homeTeam} vs ${nextMatch.awayTeam}**`,
+    `Group ${nextMatch.group} • ${nextMatch.venue}`,
+    `Kickoff: <t:${kickoffUnix}:F>`,
+    `Relative: <t:${kickoffUnix}:R>`
+  ].join("\n");
 }
 
 async function sendToResultsChannel(
@@ -268,7 +308,10 @@ function buildFullTimeEmbed(match: ParsedEspnMatch) {
       [
         `**${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`,
         "",
-        "Match complete."
+        "Match complete.",
+        "",
+        "## ⏭️ Next Match",
+        buildNextMatchText(match)
       ].join("\n")
     );
 }
