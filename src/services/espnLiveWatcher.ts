@@ -76,6 +76,51 @@ function parseGoalKey(key: string) {
   };
 }
 
+function normaliseTeamName(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function isSameTeam(left: string, right: string) {
+  const normalisedLeft = normaliseTeamName(left);
+  const normalisedRight = normaliseTeamName(right);
+
+  return (
+    normalisedLeft === normalisedRight ||
+    normalisedLeft.includes(normalisedRight) ||
+    normalisedRight.includes(normalisedLeft)
+  );
+}
+
+function getScoreAfterGoal(
+  match: ParsedEspnMatch,
+  targetGoal: ParsedEspnGoal
+) {
+  let homeScore = 0;
+  let awayScore = 0;
+
+  const targetKey = goalKey(targetGoal);
+
+  for (const goal of match.goals) {
+    if (isSameTeam(goal.teamName, match.homeTeam)) {
+      homeScore += 1;
+    } else if (isSameTeam(goal.teamName, match.awayTeam)) {
+      awayScore += 1;
+    }
+
+    if (goalKey(goal) === targetKey) {
+      break;
+    }
+  }
+
+  const couldCalculateScore = homeScore + awayScore > 0;
+
+  if (!couldCalculateScore) {
+    return `${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}`;
+  }
+
+  return `${match.homeTeam} ${homeScore} - ${awayScore} ${match.awayTeam}`;
+}
+
 async function sendToResultsChannel(
   client: Client,
   embed: EmbedBuilder
@@ -138,11 +183,13 @@ function buildGoalEmbed(match: ParsedEspnMatch, goal: ParsedEspnGoal) {
     ? ` (${tags.join(", ")})`
     : "";
 
+  const scoreLine = getScoreAfterGoal(match, goal);
+
   return new EmbedBuilder()
     .setTitle("⚽ GOAL!")
     .setDescription(
       [
-        `**${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`,
+        `**${scoreLine}**`,
         "",
         `**${goal.minute}** — ${goal.scorer}${tagText}`,
         `Team: **${goal.teamName}**`
