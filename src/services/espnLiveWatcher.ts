@@ -157,42 +157,70 @@ function versusLine(homeTeam: string, awayTeam: string) {
 
 function goalKey(goal: ParsedEspnGoal) {
   return [
-    goal.minute,
-    goal.scorer,
-    goal.teamName,
-    goal.type,
-    goal.ownGoal ? "OG" : "",
-    goal.penalty ? "PEN" : ""
+    normaliseText(goal.minute),
+    normaliseText(goal.scorer),
+    normaliseText(goal.teamName),
+    goal.ownGoal ? "og" : "goal",
+    goal.penalty ? "pen" : ""
+  ].join("|");
+}
+
+function normaliseStoredGoalKey(key: string) {
+  const [
+    minute,
+    scorer,
+    teamName,
+    partFour,
+    partFive,
+    partSix
+  ] = key.split("|");
+
+  const normalisedPartFour = normaliseText(partFour ?? "");
+  const normalisedPartFive = normaliseText(partFive ?? "");
+  const normalisedPartSix = normaliseText(partSix ?? "");
+
+  const isOwnGoal =
+    normalisedPartFour === "og" ||
+    normalisedPartFive === "og" ||
+    normalisedPartSix === "og";
+
+  const isPenalty =
+    normalisedPartFour === "pen" ||
+    normalisedPartFive === "pen" ||
+    normalisedPartSix === "pen";
+
+  return [
+    normaliseText(minute ?? ""),
+    normaliseText(scorer ?? ""),
+    normaliseText(teamName ?? ""),
+    isOwnGoal ? "og" : "goal",
+    isPenalty ? "pen" : ""
   ].join("|");
 }
 
 function redCardKey(card: ParsedEspnCard) {
   return [
-    card.minute,
-    card.player,
-    card.teamName,
-    card.type
+    normaliseText(card.minute),
+    normaliseText(card.player),
+    normaliseText(card.teamName),
+    normaliseText(card.type)
   ].join("|");
 }
 
-function parseGoalKey(key: string) {
+function normaliseStoredRedCardKey(key: string) {
   const [
     minute,
-    scorer,
+    player,
     teamName,
-    type,
-    ownGoal,
-    penalty
+    type
   ] = key.split("|");
 
-  return {
-    minute: minute || "?",
-    scorer: scorer || "Unknown scorer",
-    teamName: teamName || "Unknown team",
-    type: type || "Goal",
-    ownGoal: ownGoal === "OG",
-    penalty: penalty === "PEN"
-  };
+  return [
+    normaliseText(minute ?? ""),
+    normaliseText(player ?? ""),
+    normaliseText(teamName ?? ""),
+    normaliseText(type ?? "")
+  ].join("|");
 }
 
 function isSameTeam(left: string, right: string) {
@@ -393,26 +421,6 @@ function buildRedCardEmbed(match: ParsedEspnMatch, card: ParsedEspnCard) {
     );
 }
 
-function buildGoalDisallowedEmbed(
-  match: ParsedEspnMatch,
-  removedGoalKey: string
-) {
-  const removedGoal = parseGoalKey(removedGoalKey);
-
-  return new EmbedBuilder()
-    .setTitle("🚫 Goal disallowed")
-    .setDescription(
-      [
-        `**${scoreLine(match)}**`,
-        "",
-        "A previously posted goal appears to have been removed after review.",
-        "",
-        `Removed goal: **${removedGoal.minute}** — ${removedGoal.scorer}${getGoalTagText(removedGoal)}`,
-        `Team: **${teamWithFlag(removedGoal.teamName)}**`
-      ].join("\n")
-    );
-}
-
 function buildScoreCorrectionEmbed(
   match: ParsedEspnMatch,
   oldHomeScore: number,
@@ -533,24 +541,15 @@ async function processMatch(client: Client, match: ParsedEspnMatch) {
     state.matchStartPosted = true;
   }
 
-  const postedGoalKeys = new Set(state.postedGoalKeys ?? []);
-  const postedRedCardKeys = new Set(state.postedRedCardKeys ?? []);
-  const currentGoalKeys = new Set(match.goals.map(goalKey));
-  const disallowedGoalKeys = new Set(state.disallowedGoalKeys ?? []);
+  const postedGoalKeys = new Set(
+    (state.postedGoalKeys ?? []).map(normaliseStoredGoalKey)
+  );
+
+  const postedRedCardKeys = new Set(
+    (state.postedRedCardKeys ?? []).map(normaliseStoredRedCardKey)
+  );
+
   const postedVarKeys = new Set(state.postedVarKeys ?? []);
-
-  for (const oldGoalKey of postedGoalKeys) {
-    const goalNoLongerExists = !currentGoalKeys.has(oldGoalKey);
-
-    if (goalNoLongerExists && !disallowedGoalKeys.has(oldGoalKey)) {
-      await sendToResultsChannel(
-        client,
-        buildGoalDisallowedEmbed(match, oldGoalKey)
-      );
-
-      disallowedGoalKeys.add(oldGoalKey);
-    }
-  }
 
   const scoreWentBackwards =
     match.homeScore < state.lastHomeScore ||
@@ -619,7 +618,6 @@ async function processMatch(client: Client, match: ParsedEspnMatch) {
   state.lastAwayScore = match.awayScore;
   state.postedGoalKeys = Array.from(postedGoalKeys);
   state.postedRedCardKeys = Array.from(postedRedCardKeys);
-  state.disallowedGoalKeys = Array.from(disallowedGoalKeys);
   state.postedVarKeys = Array.from(postedVarKeys);
 
   await state.save();
