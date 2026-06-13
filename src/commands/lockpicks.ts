@@ -8,7 +8,7 @@ import { GuildSettings } from "../models/GuildSettings.js";
 
 export const data = new SlashCommandBuilder()
   .setName("lockpicks")
-  .setDescription("Lock all World Cup predictions")
+  .setDescription("Lock group stage predictions")
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
 export async function execute(interaction: ChatInputCommandInteraction) {
@@ -22,19 +22,28 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
     await interaction.reply({
-      content: "You need Manage Server permission to lock picks.",
+      content: "You need Manage Server permission to lock group picks.",
       ephemeral: false
     });
     return;
   }
 
-  const settings = await GuildSettings.findOneAndUpdate(
+  await GuildSettings.findOneAndUpdate(
     {
       guildId: interaction.guildId
     },
     {
       $set: {
-        picksLocked: true,
+        /**
+         * Keep legacy global lock off so match predictions do not get blocked
+         * by the old picksLocked field.
+         */
+        picksLocked: false,
+
+        groupPicksLocked: true,
+        groupPicksLockedBy: interaction.user.id,
+        groupPicksLockedAt: new Date(),
+
         lockedBy: interaction.user.id,
         lockedAt: new Date()
       }
@@ -47,7 +56,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   );
 
   await interaction.reply({
-    content: `🔒 Picks are now locked. Users can no longer start, restart, edit, or submit predictions.`,
+    content: "🔒 Group predictions are now locked. Users can no longer start, restart, edit, or submit group predictions.",
     ephemeral: false
   });
 }

@@ -15,10 +15,10 @@ export async function getMatchPredictionLockStatus(
     guildId
   });
 
-  if (settings?.picksLocked) {
+  if (settings?.matchPicksLocked) {
     return {
       locked: true,
-      reason: "🔒 All picks are currently locked."
+      reason: "🔒 Match predictions are currently locked."
     };
   }
 

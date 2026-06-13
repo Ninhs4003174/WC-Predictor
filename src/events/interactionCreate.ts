@@ -90,12 +90,12 @@ function hasCompletedAllGroups(prediction: PredictionSummary) {
   });
 }
 
-async function arePicksLocked(guildId: string) {
+async function areGroupPicksLocked(guildId: string) {
   const settings = await GuildSettings.findOne({
     guildId
   });
 
-  return Boolean(settings?.picksLocked);
+  return Boolean(settings?.groupPicksLocked);
 }
 
 async function continuePredictions(interaction: Interaction) {
@@ -143,7 +143,7 @@ export async function handlePlayInteraction(
 ): Promise<boolean> {
   if (!interaction.guildId) return false;
 
-  const locked = await arePicksLocked(interaction.guildId);
+  const locked = await areGroupPicksLocked(interaction.guildId);
 
   const isCancelRestartButton =
     interaction.isButton() &&
@@ -162,7 +162,7 @@ export async function handlePlayInteraction(
 
     if (isPredictionInteraction) {
       await interaction.reply({
-        content: "🔒 Picks are currently locked. You cannot start, continue, restart, edit, or submit predictions.",
+        content: "🔒 Group predictions are currently locked. You cannot start, continue, restart, edit, or submit group predictions.",
         ephemeral: true
       });
 
