@@ -34,10 +34,16 @@ function canSendToChannel(channel: unknown): channel is SendableDiscordChannel {
   );
 }
 
-function normaliseStatus(status: string) {
-  return status
+function normaliseText(value: string) {
+  return value
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, "");
+}
+
+function normaliseStatus(status: string) {
+  return normaliseText(status);
 }
 
 function isLive(match: ParsedEspnMatch) {
@@ -61,6 +67,92 @@ function isOneHourBeforeKickoff(kickoffUtc: string) {
   const minutesUntilKickoff = (kickoffTime - now) / 1000 / 60;
 
   return minutesUntilKickoff <= 65 && minutesUntilKickoff >= 55;
+}
+
+function getTeamFlag(teamName: string) {
+  const normalised = normaliseText(teamName);
+
+  const ENGLAND_FLAG = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}";
+  const SCOTLAND_FLAG = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}";
+
+  const flags: Record<string, string> = {
+    mexico: "🇲🇽",
+    southafrica: "🇿🇦",
+    southkorea: "🇰🇷",
+    korea: "🇰🇷",
+    czechia: "🇨🇿",
+    czechrepublic: "🇨🇿",
+    canada: "🇨🇦",
+    bosniaandherzegovina: "🇧🇦",
+    bosniaherzegovina: "🇧🇦",
+    bosniaherz: "🇧🇦",
+    qatar: "🇶🇦",
+    switzerland: "🇨🇭",
+    unitedstates: "🇺🇸",
+    usa: "🇺🇸",
+    us: "🇺🇸",
+    paraguay: "🇵🇾",
+    brazil: "🇧🇷",
+    morocco: "🇲🇦",
+    haiti: "🇭🇹",
+    scotland: SCOTLAND_FLAG,
+    australia: "🇦🇺",
+    turkiye: "🇹🇷",
+    turkey: "🇹🇷",
+    germany: "🇩🇪",
+    curacao: "🇨🇼",
+    ivorycoast: "🇨🇮",
+    cotedivoire: "🇨🇮",
+    ecuador: "🇪🇨",
+    netherlands: "🇳🇱",
+    japan: "🇯🇵",
+    sweden: "🇸🇪",
+    tunisia: "🇹🇳",
+    spain: "🇪🇸",
+    capeverde: "🇨🇻",
+    belgium: "🇧🇪",
+    egypt: "🇪🇬",
+    saudiarabia: "🇸🇦",
+    uruguay: "🇺🇾",
+    iran: "🇮🇷",
+    newzealand: "🇳🇿",
+    france: "🇫🇷",
+    senegal: "🇸🇳",
+    iraq: "🇮🇶",
+    norway: "🇳🇴",
+    argentina: "🇦🇷",
+    algeria: "🇩🇿",
+    austria: "🇦🇹",
+    jordan: "🇯🇴",
+    portugal: "🇵🇹",
+    congodr: "🇨🇩",
+    drcongo: "🇨🇩",
+    democraticrepublicofcongo: "🇨🇩",
+    england: ENGLAND_FLAG,
+    croatia: "🇭🇷",
+    ghana: "🇬🇭",
+    panama: "🇵🇦",
+    uzbekistan: "🇺🇿",
+    colombia: "🇨🇴"
+  };
+
+  return flags[normalised] ?? "";
+}
+
+function teamWithFlag(teamName: string) {
+  const flag = getTeamFlag(teamName);
+
+  return flag
+    ? `${flag} ${teamName}`
+    : teamName;
+}
+
+function scoreLine(match: ParsedEspnMatch) {
+  return `${teamWithFlag(match.homeTeam)} ${match.homeScore} - ${match.awayScore} ${teamWithFlag(match.awayTeam)}`;
+}
+
+function versusLine(homeTeam: string, awayTeam: string) {
+  return `${teamWithFlag(homeTeam)} vs ${teamWithFlag(awayTeam)}`;
 }
 
 function goalKey(goal: ParsedEspnGoal) {
@@ -103,13 +195,9 @@ function parseGoalKey(key: string) {
   };
 }
 
-function normaliseTeamName(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 function isSameTeam(left: string, right: string) {
-  const normalisedLeft = normaliseTeamName(left);
-  const normalisedRight = normaliseTeamName(right);
+  const normalisedLeft = normaliseText(left);
+  const normalisedRight = normaliseText(right);
 
   return (
     normalisedLeft === normalisedRight ||
@@ -142,27 +230,42 @@ function getScoreAfterGoal(
   const couldCalculateScore = homeScore + awayScore > 0;
 
   if (!couldCalculateScore) {
-    return `${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}`;
+    return scoreLine(match);
   }
 
-  return `${match.homeTeam} ${homeScore} - ${awayScore} ${match.awayTeam}`;
+  return `${teamWithFlag(match.homeTeam)} ${homeScore} - ${awayScore} ${teamWithFlag(match.awayTeam)}`;
 }
 
-function formatGoal(goal: ParsedEspnGoal) {
+function getGoalTagText(goal: ParsedEspnGoal) {
   const tags = [];
 
   if (goal.penalty) tags.push("PEN");
   if (goal.ownGoal) tags.push("OG");
 
-  const tagText = tags.length > 0
+  return tags.length > 0
     ? ` (${tags.join(", ")})`
     : "";
+}
 
-  return `⚽ **${goal.minute}** — ${goal.scorer}${tagText} • ${goal.teamName}`;
+function formatGoal(goal: ParsedEspnGoal) {
+  return [
+    `**${goal.minute}** — ${goal.scorer}${getGoalTagText(goal)}`,
+    `Team: **${teamWithFlag(goal.teamName)}**`
+  ].join("\n");
+}
+
+function formatFullTimeGoal(goal: ParsedEspnGoal) {
+  return [
+    `⚽ **${goal.minute}** — ${goal.scorer}${getGoalTagText(goal)}`,
+    `Team: **${teamWithFlag(goal.teamName)}**`
+  ].join("\n");
 }
 
 function formatRedCard(card: ParsedEspnCard) {
-  return `🟥 **${card.minute}** — ${card.player} • ${card.teamName}`;
+  return [
+    `🟥 **${card.minute}** — ${card.player}`,
+    `Team: **${teamWithFlag(card.teamName)}**`
+  ].join("\n");
 }
 
 function formatFullTimeGoals(match: ParsedEspnMatch) {
@@ -171,18 +274,14 @@ function formatFullTimeGoals(match: ParsedEspnMatch) {
   }
 
   return match.goals
-    .map(formatGoal)
-    .join("\n");
+    .map(formatFullTimeGoal)
+    .join("\n\n");
 }
 
 function formatFullTimeRedCards(match: ParsedEspnMatch) {
-  if (match.redCards.length === 0) {
-    return "No red cards.";
-  }
-
   return match.redCards
     .map(formatRedCard)
-    .join("\n");
+    .join("\n\n");
 }
 
 function getNextScheduledMatch(match: ParsedEspnMatch): ScheduleMatch | undefined {
@@ -213,7 +312,7 @@ function buildNextMatchText(match: ParsedEspnMatch) {
   const kickoffUnix = Math.floor(new Date(nextMatch.kickoffUtc).getTime() / 1000);
 
   return [
-    `**${nextMatch.homeTeam} vs ${nextMatch.awayTeam}**`,
+    `**${versusLine(nextMatch.homeTeam, nextMatch.awayTeam)}**`,
     `Group ${nextMatch.group} • ${nextMatch.venue}`,
     `Kickoff: <t:${kickoffUnix}:F>`
   ].join("\n");
@@ -249,7 +348,7 @@ function buildOneHourAlertEmbed(match: ParsedEspnMatch) {
     .setTitle("⏰ Match starts in 1 hour")
     .setDescription(
       [
-        `**${match.homeTeam} vs ${match.awayTeam}**`,
+        `**${versusLine(match.homeTeam, match.awayTeam)}**`,
         "",
         `Kickoff: <t:${kickoffUnix}:F>`
       ].join("\n")
@@ -261,21 +360,21 @@ function buildMatchStartEmbed(match: ParsedEspnMatch) {
     .setTitle("🟢 Match Started")
     .setDescription(
       [
-        `**${match.homeTeam} vs ${match.awayTeam}**`,
+        `**${versusLine(match.homeTeam, match.awayTeam)}**`,
         "",
-        `Current score: **${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`
+        `Current score: **${scoreLine(match)}**`
       ].join("\n")
     );
 }
 
 function buildGoalEmbed(match: ParsedEspnMatch, goal: ParsedEspnGoal) {
-  const scoreLine = getScoreAfterGoal(match, goal);
+  const calculatedScoreLine = getScoreAfterGoal(match, goal);
 
   return new EmbedBuilder()
     .setTitle("⚽ GOAL!")
     .setDescription(
       [
-        `**${scoreLine}**`,
+        `**${calculatedScoreLine}**`,
         "",
         formatGoal(goal)
       ].join("\n")
@@ -287,7 +386,7 @@ function buildRedCardEmbed(match: ParsedEspnMatch, card: ParsedEspnCard) {
     .setTitle("🟥 Red Card")
     .setDescription(
       [
-        `**${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`,
+        `**${scoreLine(match)}**`,
         "",
         formatRedCard(card)
       ].join("\n")
@@ -300,25 +399,16 @@ function buildGoalDisallowedEmbed(
 ) {
   const removedGoal = parseGoalKey(removedGoalKey);
 
-  const tags = [];
-
-  if (removedGoal.penalty) tags.push("PEN");
-  if (removedGoal.ownGoal) tags.push("OG");
-
-  const tagText = tags.length > 0
-    ? ` (${tags.join(", ")})`
-    : "";
-
   return new EmbedBuilder()
     .setTitle("🚫 Goal disallowed")
     .setDescription(
       [
-        `**${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`,
+        `**${scoreLine(match)}**`,
         "",
         "A previously posted goal appears to have been removed after review.",
         "",
-        `Removed goal: **${removedGoal.minute}** — ${removedGoal.scorer}${tagText}`,
-        `Team: **${removedGoal.teamName}**`
+        `Removed goal: **${removedGoal.minute}** — ${removedGoal.scorer}${getGoalTagText(removedGoal)}`,
+        `Team: **${teamWithFlag(removedGoal.teamName)}**`
       ].join("\n")
     );
 }
@@ -334,8 +424,8 @@ function buildScoreCorrectionEmbed(
       [
         "Possible VAR/disallowed goal update.",
         "",
-        `Previous score: **${match.homeTeam} ${oldHomeScore} - ${oldAwayScore} ${match.awayTeam}**`,
-        `Current score: **${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`
+        `Previous score: **${teamWithFlag(match.homeTeam)} ${oldHomeScore} - ${oldAwayScore} ${teamWithFlag(match.awayTeam)}**`,
+        `Current score: **${scoreLine(match)}**`
       ].join("\n")
     );
 }
@@ -343,28 +433,34 @@ function buildScoreCorrectionEmbed(
 function buildHalfTimeEmbed(match: ParsedEspnMatch) {
   return new EmbedBuilder()
     .setTitle("⏸️ Half-time")
-    .setDescription(
-      `**${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`
-    );
+    .setDescription(`**${scoreLine(match)}**`);
 }
 
 function buildFullTimeEmbed(match: ParsedEspnMatch) {
+  const sections = [
+    `**${scoreLine(match)}**`,
+    "",
+    "## ⚽ Goals",
+    formatFullTimeGoals(match)
+  ];
+
+  if (match.redCards.length > 0) {
+    sections.push(
+      "",
+      "## 🟥 Red Cards",
+      formatFullTimeRedCards(match)
+    );
+  }
+
+  sections.push(
+    "",
+    "## ⏭️ Next Match",
+    buildNextMatchText(match)
+  );
+
   return new EmbedBuilder()
     .setTitle("🏁 Full-time")
-    .setDescription(
-      [
-        `**${match.homeTeam} ${match.homeScore} - ${match.awayScore} ${match.awayTeam}**`,
-        "",
-        "## ⚽ Goals",
-        formatFullTimeGoals(match),
-        "",
-        "## 🟥 Red Cards",
-        formatFullTimeRedCards(match),
-        "",
-        "## ⏭️ Next Match",
-        buildNextMatchText(match)
-      ].join("\n")
-    );
+    .setDescription(sections.join("\n"));
 }
 
 async function createInitialState(match: ParsedEspnMatch) {
