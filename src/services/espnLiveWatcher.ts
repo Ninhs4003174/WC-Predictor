@@ -19,6 +19,8 @@ import { EspnLiveState } from "../models/EspnLiveState.js";
 
 const CHECK_INTERVAL_MS = 1 * 60 * 1000;
 
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
 let watcherStarted = false;
 
 type SendableDiscordChannel = {
@@ -67,6 +69,81 @@ function isOneHourBeforeKickoff(kickoffUtc: string) {
   const minutesUntilKickoff = (kickoffTime - now) / 1000 / 60;
 
   return minutesUntilKickoff <= 65 && minutesUntilKickoff >= 55;
+}
+
+function formatEspnDate(date: Date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+
+  return `${year}${month}${day}`;
+}
+
+function addUtcDays(date: Date, days: number) {
+  const copy = new Date(date);
+  copy.setUTCDate(copy.getUTCDate() + days);
+
+  return copy;
+}
+
+function getScoreboardDatesToCheck() {
+  const dates = new Set<string>();
+  const now = new Date();
+  const nowMs = Date.now();
+
+  dates.add(formatEspnDate(addUtcDays(now, -1)));
+  dates.add(formatEspnDate(now));
+  dates.add(formatEspnDate(addUtcDays(now, 1)));
+
+  for (const scheduledMatch of WORLD_CUP_GROUP_STAGE_SCHEDULE) {
+    const kickoffMs = new Date(scheduledMatch.kickoffUtc).getTime();
+
+    const isNearby =
+      kickoffMs >= nowMs - 6 * ONE_HOUR_MS &&
+      kickoffMs <= nowMs + 36 * ONE_HOUR_MS;
+
+    if (isNearby) {
+      dates.add(formatEspnDate(new Date(scheduledMatch.kickoffUtc)));
+    }
+  }
+
+  return Array.from(dates);
+}
+
+async function fetchMatchesForWatcher() {
+  const dates = getScoreboardDatesToCheck();
+
+  const results = await Promise.allSettled(
+    dates.map(async date => {
+      const matches = await fetchEspnScoreboard({
+        league: "fifa.world",
+        date
+      });
+
+      return {
+        date,
+        matches
+      };
+    })
+  );
+
+  const matchMap = new Map<string, ParsedEspnMatch>();
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.warn("⚠️ ESPN date check failed:", result.reason);
+      continue;
+    }
+
+    for (const match of result.value.matches) {
+      matchMap.set(match.espnId, match);
+    }
+  }
+
+  return {
+    dates,
+    matches: Array.from(matchMap.values())
+  };
 }
 
 function getTeamFlag(teamName: string) {
@@ -484,12 +561,24 @@ async function createInitialState(match: ParsedEspnMatch) {
         lastStatus: match.status,
         lastHomeScore: match.homeScore,
         lastAwayScore: match.awayScore,
-        postedGoalKeys: match.statusState === "pre"
-          ? []
-          : match.goals.map(goalKey),
-        postedRedCardKeys: match.statusState === "pre"
-          ? []
-          : match.redCards.map(redCardKey),
+
+        /**
+         * Important:
+         * If we first discover a live match late because ESPN's default
+         * scoreboard missed it, do NOT mark existing live goals as posted.
+         * This lets the bot catch up and post the current live goal.
+         *
+         * For already-completed matches, mark events as posted so the bot
+         * does not spam old finished matches after a restart.
+         */
+        postedGoalKeys: match.completed
+          ? match.goals.map(goalKey)
+          : [],
+
+        postedRedCardKeys: match.completed
+          ? match.redCards.map(redCardKey)
+          : [],
+
         disallowedGoalKeys: [],
         postedVarKeys: [],
         oneHourAlertPosted: false,
@@ -625,15 +714,22 @@ async function processMatch(client: Client, match: ParsedEspnMatch) {
 
 async function checkEspnMatches(client: Client) {
   try {
-    const matches = await fetchEspnScoreboard({
-      league: "fifa.world"
-    });
+    const {
+      dates,
+      matches
+    } = await fetchMatchesForWatcher();
 
     for (const match of matches) {
       await processMatch(client, match);
     }
 
-    console.log(`📡 ESPN live watcher checked ${matches.length} match(es).`);
+    const matchNames = matches
+      .map(match => `${match.homeTeam} vs ${match.awayTeam} (${match.status})`)
+      .join(", ");
+
+    console.log(
+      `📡 ESPN live watcher checked ${matches.length} match(es) from dates ${dates.join(", ")}${matchNames ? `: ${matchNames}` : "."}`
+    );
   } catch (error) {
     console.error("❌ ESPN live watcher failed:", error);
   }
