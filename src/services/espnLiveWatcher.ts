@@ -20,6 +20,7 @@ import { EspnLiveState } from "../models/EspnLiveState.js";
 const CHECK_INTERVAL_MS = 1 * 60 * 1000;
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
+const NEXT_MATCH_BUFFER_MS = 5 * 60 * 1000;
 
 let watcherStarted = false;
 
@@ -311,6 +312,21 @@ function isSameTeam(left: string, right: string) {
   );
 }
 
+function isSameScheduledMatch(
+  match: ParsedEspnMatch,
+  scheduledMatch: ScheduleMatch
+) {
+  const sameOrder =
+    isSameTeam(match.homeTeam, scheduledMatch.homeTeam) &&
+    isSameTeam(match.awayTeam, scheduledMatch.awayTeam);
+
+  const reversedOrder =
+    isSameTeam(match.homeTeam, scheduledMatch.awayTeam) &&
+    isSameTeam(match.awayTeam, scheduledMatch.homeTeam);
+
+  return sameOrder || reversedOrder;
+}
+
 function getScoreAfterGoal(
   match: ParsedEspnMatch,
   targetGoal: ParsedEspnGoal
@@ -390,17 +406,21 @@ function formatFullTimeRedCards(match: ParsedEspnMatch) {
 }
 
 function getNextScheduledMatch(match: ParsedEspnMatch): ScheduleMatch | undefined {
-  const currentKickoffTime = new Date(match.kickoffUtc).getTime();
-
-  const safeReferenceTime = Number.isNaN(currentKickoffTime)
-    ? Date.now()
-    : currentKickoffTime;
+  const now = Date.now();
+  const referenceTime = now - NEXT_MATCH_BUFFER_MS;
 
   return WORLD_CUP_GROUP_STAGE_SCHEDULE
     .filter(scheduledMatch => {
       const scheduledKickoffTime = new Date(scheduledMatch.kickoffUtc).getTime();
 
-      return scheduledKickoffTime > safeReferenceTime;
+      if (Number.isNaN(scheduledKickoffTime)) {
+        return false;
+      }
+
+      const isFutureOrVeryRecent = scheduledKickoffTime > referenceTime;
+      const isCurrentMatch = isSameScheduledMatch(match, scheduledMatch);
+
+      return isFutureOrVeryRecent && !isCurrentMatch;
     })
     .sort((a, b) => {
       return new Date(a.kickoffUtc).getTime() - new Date(b.kickoffUtc).getTime();
@@ -562,15 +582,6 @@ async function createInitialState(match: ParsedEspnMatch) {
         lastHomeScore: match.homeScore,
         lastAwayScore: match.awayScore,
 
-        /**
-         * Important:
-         * If we first discover a live match late because ESPN's default
-         * scoreboard missed it, do NOT mark existing live goals as posted.
-         * This lets the bot catch up and post the current live goal.
-         *
-         * For already-completed matches, mark events as posted so the bot
-         * does not spam old finished matches after a restart.
-         */
         postedGoalKeys: match.completed
           ? match.goals.map(goalKey)
           : [],
