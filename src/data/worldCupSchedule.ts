@@ -527,6 +527,318 @@ export const WORLD_CUP_GROUP_STAGE_SCHEDULE: ScheduleMatch[] = [
   }
 ];
 
+export const WORLD_CUP_KNOCKOUT_STAGE_SCHEDULE: ScheduleMatch[] = [
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 73,
+    homeTeam: "South Africa",
+    awayTeam: "Canada",
+    venue: "Inglewood, California",
+    kickoffUtc: "2026-06-28T19:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 76,
+    homeTeam: "Brazil",
+    awayTeam: "Japan",
+    venue: "Houston",
+    kickoffUtc: "2026-06-29T17:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 74,
+    homeTeam: "Germany",
+    awayTeam: "Paraguay",
+    venue: "Foxborough, Massachusetts",
+    kickoffUtc: "2026-06-29T20:30:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 75,
+    homeTeam: "Netherlands",
+    awayTeam: "Morocco",
+    venue: "Guadalupe, Mexico",
+    kickoffUtc: "2026-06-30T01:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 78,
+    homeTeam: "Ivory Coast",
+    awayTeam: "Norway",
+    venue: "Arlington, Texas",
+    kickoffUtc: "2026-06-30T17:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 77,
+    homeTeam: "France",
+    awayTeam: "Sweden",
+    venue: "East Rutherford, New Jersey",
+    kickoffUtc: "2026-06-30T21:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 79,
+    homeTeam: "Mexico",
+    awayTeam: "Ecuador",
+    venue: "Mexico City",
+    kickoffUtc: "2026-07-01T01:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 80,
+    homeTeam: "England",
+    awayTeam: "DR Congo",
+    venue: "Atlanta",
+    kickoffUtc: "2026-07-01T16:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 82,
+    homeTeam: "Belgium",
+    awayTeam: "Senegal",
+    venue: "Seattle",
+    kickoffUtc: "2026-07-01T20:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 81,
+    homeTeam: "United States",
+    awayTeam: "Bosnia and Herzegovina",
+    venue: "Santa Clara, California",
+    kickoffUtc: "2026-07-02T00:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 84,
+    homeTeam: "Spain",
+    awayTeam: "Austria",
+    venue: "Inglewood, California",
+    kickoffUtc: "2026-07-02T19:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 83,
+    homeTeam: "Portugal",
+    awayTeam: "Croatia",
+    venue: "Toronto",
+    kickoffUtc: "2026-07-02T23:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 85,
+    homeTeam: "Switzerland",
+    awayTeam: "Algeria",
+    venue: "Vancouver",
+    kickoffUtc: "2026-07-03T03:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 88,
+    homeTeam: "Australia",
+    awayTeam: "Egypt",
+    venue: "Arlington, Texas",
+    kickoffUtc: "2026-07-03T18:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 86,
+    homeTeam: "Argentina",
+    awayTeam: "Cape Verde",
+    venue: "Miami Gardens, Florida",
+    kickoffUtc: "2026-07-03T22:00:00Z"
+  },
+  {
+    stage: "r32",
+    stageLabel: "Round of 32",
+    matchNumber: 87,
+    homeTeam: "Colombia",
+    awayTeam: "Ghana",
+    venue: "Kansas City, Missouri",
+    kickoffUtc: "2026-07-04T01:30:00Z"
+  },
+
+  {
+    stage: "r16",
+    stageLabel: "Round of 16",
+    matchNumber: 89,
+    homeTeam: "Winner Match 73",
+    awayTeam: "Winner Match 75",
+    venue: "Houston",
+    kickoffUtc: "2026-07-04T17:00:00Z"
+  },
+  {
+    stage: "r16",
+    stageLabel: "Round of 16",
+    matchNumber: 90,
+    homeTeam: "Winner Match 74",
+    awayTeam: "Winner Match 77",
+    venue: "Philadelphia",
+    kickoffUtc: "2026-07-04T21:00:00Z"
+  },
+  {
+    stage: "r16",
+    stageLabel: "Round of 16",
+    matchNumber: 91,
+    homeTeam: "Winner Match 76",
+    awayTeam: "Winner Match 78",
+    venue: "East Rutherford, New Jersey",
+    kickoffUtc: "2026-07-05T20:00:00Z"
+  },
+  {
+    stage: "r16",
+    stageLabel: "Round of 16",
+    matchNumber: 92,
+    homeTeam: "Winner Match 79",
+    awayTeam: "Winner Match 80",
+    venue: "Mexico City",
+    kickoffUtc: "2026-07-06T00:00:00Z"
+  },
+  {
+    stage: "r16",
+    stageLabel: "Round of 16",
+    matchNumber: 93,
+    homeTeam: "Winner Match 83",
+    awayTeam: "Winner Match 84",
+    venue: "Arlington, Texas",
+    kickoffUtc: "2026-07-06T19:00:00Z"
+  },
+  {
+    stage: "r16",
+    stageLabel: "Round of 16",
+    matchNumber: 94,
+    homeTeam: "Winner Match 81",
+    awayTeam: "Winner Match 82",
+    venue: "Seattle",
+    kickoffUtc: "2026-07-07T00:00:00Z"
+  },
+  {
+    stage: "r16",
+    stageLabel: "Round of 16",
+    matchNumber: 95,
+    homeTeam: "Winner Match 86",
+    awayTeam: "Winner Match 88",
+    venue: "Atlanta",
+    kickoffUtc: "2026-07-07T16:00:00Z"
+  },
+  {
+    stage: "r16",
+    stageLabel: "Round of 16",
+    matchNumber: 96,
+    homeTeam: "Winner Match 85",
+    awayTeam: "Winner Match 87",
+    venue: "Vancouver",
+    kickoffUtc: "2026-07-07T20:00:00Z"
+  },
+
+  {
+    stage: "qf",
+    stageLabel: "Quarter-final",
+    matchNumber: 97,
+    homeTeam: "Winner Match 89",
+    awayTeam: "Winner Match 90",
+    venue: "Foxborough, Massachusetts",
+    kickoffUtc: "2026-07-09T20:00:00Z"
+  },
+  {
+    stage: "qf",
+    stageLabel: "Quarter-final",
+    matchNumber: 98,
+    homeTeam: "Winner Match 93",
+    awayTeam: "Winner Match 94",
+    venue: "Inglewood, California",
+    kickoffUtc: "2026-07-10T19:00:00Z"
+  },
+  {
+    stage: "qf",
+    stageLabel: "Quarter-final",
+    matchNumber: 99,
+    homeTeam: "Winner Match 91",
+    awayTeam: "Winner Match 92",
+    venue: "Miami Gardens, Florida",
+    kickoffUtc: "2026-07-11T21:00:00Z"
+  },
+  {
+    stage: "qf",
+    stageLabel: "Quarter-final",
+    matchNumber: 100,
+    homeTeam: "Winner Match 95",
+    awayTeam: "Winner Match 96",
+    venue: "Kansas City, Missouri",
+    kickoffUtc: "2026-07-12T01:00:00Z"
+  },
+
+  {
+    stage: "sf",
+    stageLabel: "Semi-final",
+    matchNumber: 101,
+    homeTeam: "Winner Match 97",
+    awayTeam: "Winner Match 98",
+    venue: "Arlington, Texas",
+    kickoffUtc: "2026-07-14T19:00:00Z"
+  },
+  {
+    stage: "sf",
+    stageLabel: "Semi-final",
+    matchNumber: 102,
+    homeTeam: "Winner Match 99",
+    awayTeam: "Winner Match 100",
+    venue: "Atlanta",
+    kickoffUtc: "2026-07-15T19:00:00Z"
+  },
+
+  {
+    stage: "third",
+    stageLabel: "Third-place playoff",
+    matchNumber: 103,
+    homeTeam: "Loser Match 101",
+    awayTeam: "Loser Match 102",
+    venue: "Miami Gardens, Florida",
+    kickoffUtc: "2026-07-18T21:00:00Z"
+  },
+  {
+    stage: "final",
+    stageLabel: "Final",
+    matchNumber: 104,
+    homeTeam: "Winner Match 101",
+    awayTeam: "Winner Match 102",
+    venue: "East Rutherford, New Jersey",
+    kickoffUtc: "2026-07-19T19:00:00Z"
+  }
+];
+
+export const WORLD_CUP_SCHEDULE: ScheduleMatch[] = [
+  ...WORLD_CUP_GROUP_STAGE_SCHEDULE,
+  ...WORLD_CUP_KNOCKOUT_STAGE_SCHEDULE
+];
+
+export function getScheduleStageLabel(match: ScheduleMatch) {
+  if (match.stageLabel) {
+    return match.stageLabel;
+  }
+
+  if (match.group) {
+    return `Group ${match.group}`;
+  }
+
+  return "World Cup";
+}
+
 export function getScheduleByGroup(group: GroupKey) {
   return WORLD_CUP_GROUP_STAGE_SCHEDULE
     .filter(match => match.group === group)
@@ -535,10 +847,18 @@ export function getScheduleByGroup(group: GroupKey) {
     });
 }
 
+export function getScheduleByStage(stage: ScheduleStage) {
+  return WORLD_CUP_SCHEDULE
+    .filter(match => match.stage === stage)
+    .sort((a, b) => {
+      return new Date(a.kickoffUtc).getTime() - new Date(b.kickoffUtc).getTime();
+    });
+}
+
 export function getNextMatches(limit = 10) {
   const now = Date.now();
 
-  const upcoming = WORLD_CUP_GROUP_STAGE_SCHEDULE
+  const upcoming = WORLD_CUP_SCHEDULE
     .filter(match => new Date(match.kickoffUtc).getTime() >= now)
     .sort((a, b) => {
       return new Date(a.kickoffUtc).getTime() - new Date(b.kickoffUtc).getTime();
@@ -548,7 +868,7 @@ export function getNextMatches(limit = 10) {
     return upcoming.slice(0, limit);
   }
 
-  return WORLD_CUP_GROUP_STAGE_SCHEDULE
+  return WORLD_CUP_SCHEDULE
     .slice()
     .sort((a, b) => {
       return new Date(a.kickoffUtc).getTime() - new Date(b.kickoffUtc).getTime();
