@@ -194,7 +194,7 @@ function scorePrediction(prediction: IWorldCupPrediction): LeaderboardEntry {
   };
 }
 
-function getMedal(rank: number) {
+function getRankLabel(rank: number) {
   if (rank === 1) return "🥇";
   if (rank === 2) return "🥈";
   if (rank === 3) return "🥉";
@@ -204,7 +204,6 @@ function getMedal(rank: number) {
 
 function getPageSlice<T>(items: T[], page: number) {
   const start = page * PAGE_SIZE;
-
   return items.slice(start, start + PAGE_SIZE);
 }
 
@@ -224,60 +223,31 @@ function buildPageButtons(page: number, totalPages: number) {
   );
 }
 
-function formatGroupBreakdown(entry: LeaderboardEntry) {
-  return entry.groups
-    .map(group => {
-      return `${group.group}:${group.points}`;
-    })
-    .join(" • ");
-}
-
-function buildLeaderboardEmbed(
-  entries: LeaderboardEntry[],
-  page: number
-) {
+function buildLeaderboardEmbed(entries: LeaderboardEntry[], page: number) {
   const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
   const pageEntries = getPageSlice(entries, safePage);
 
-  const leaderboardText =
+  const description =
     pageEntries.length === 0
       ? "No group predictions have been submitted yet."
       : pageEntries
           .map((entry, index) => {
             const rank = safePage * PAGE_SIZE + index + 1;
-            const medal = getMedal(rank);
+            const rankLabel = getRankLabel(rank);
 
             return [
-              `${medal} <@${entry.userId}>`,
-              `Score: **${entry.score}/${MAX_GROUP_STAGE_SCORE}**`,
-              `Exact: **${entry.exact}** • One-off: **${entry.close}** • Groups: **${entry.completedGroups}/${GROUP_ORDER.length}**`,
-              `\`${formatGroupBreakdown(entry)}\``
+              `${rankLabel} <@${entry.userId}> — **${entry.score}/${MAX_GROUP_STAGE_SCORE}**`,
+              `Exact: **${entry.exact}** • One-off: **${entry.close}**`
             ].join("\n");
           })
           .join("\n\n");
-
-  const leader = entries[0];
-
-  const description = leader
-    ? [
-        `Current leader: <@${leader.userId}> with **${leader.score}/${MAX_GROUP_STAGE_SCORE}** points.`,
-        "",
-        `Scoring: exact position = **${EXACT_POSITION_POINTS}**, one position away = **${ONE_POSITION_AWAY_POINTS}**.`,
-        "",
-        leaderboardText
-      ].join("\n")
-    : [
-        `Scoring: exact position = **${EXACT_POSITION_POINTS}**, one position away = **${ONE_POSITION_AWAY_POINTS}**.`,
-        "",
-        leaderboardText
-      ].join("\n");
 
   return new EmbedBuilder()
     .setTitle("🏆 Group Stage Leaderboard")
     .setDescription(description)
     .setFooter({
-      text: `Page ${safePage + 1}/${totalPages} • Max score ${MAX_GROUP_STAGE_SCORE}`
+      text: `Page ${safePage + 1}/${totalPages} • Exact ${EXACT_POSITION_POINTS} pts • One-off ${ONE_POSITION_AWAY_POINTS} pts • Max ${MAX_GROUP_STAGE_SCORE}`
     })
     .setTimestamp();
 }
