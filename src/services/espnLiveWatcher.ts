@@ -11,7 +11,8 @@ import {
 } from "./espnSoccerService.js";
 
 import {
-  WORLD_CUP_GROUP_STAGE_SCHEDULE,
+  WORLD_CUP_SCHEDULE,
+  getScheduleStageLabel,
   type ScheduleMatch
 } from "../data/worldCupSchedule.js";
 
@@ -96,7 +97,7 @@ function getScoreboardDatesToCheck() {
   dates.add(formatEspnDate(now));
   dates.add(formatEspnDate(addUtcDays(now, 1)));
 
-  for (const scheduledMatch of WORLD_CUP_GROUP_STAGE_SCHEDULE) {
+  for (const scheduledMatch of WORLD_CUP_SCHEDULE) {
     const kickoffMs = new Date(scheduledMatch.kickoffUtc).getTime();
 
     const isNearby =
@@ -409,7 +410,7 @@ function getNextScheduledMatch(match: ParsedEspnMatch): ScheduleMatch | undefine
   const now = Date.now();
   const referenceTime = now - NEXT_MATCH_BUFFER_MS;
 
-  return WORLD_CUP_GROUP_STAGE_SCHEDULE
+  return WORLD_CUP_SCHEDULE
     .filter(scheduledMatch => {
       const scheduledKickoffTime = new Date(scheduledMatch.kickoffUtc).getTime();
 
@@ -427,20 +428,72 @@ function getNextScheduledMatch(match: ParsedEspnMatch): ScheduleMatch | undefine
     })[0];
 }
 
-function buildNextMatchText(match: ParsedEspnMatch) {
-  const nextMatch = getNextScheduledMatch(match);
+function getNextEspnMatch(
+  currentMatch: ParsedEspnMatch,
+  allMatches: ParsedEspnMatch[]
+) {
+  const now = Date.now();
+  const referenceTime = now - NEXT_MATCH_BUFFER_MS;
 
-  if (!nextMatch) {
-    return "No upcoming group stage match found.";
-  }
+  return allMatches
+    .filter(match => {
+      if (match.espnId === currentMatch.espnId) {
+        return false;
+      }
 
+      const kickoffTime = new Date(match.kickoffUtc).getTime();
+
+      if (Number.isNaN(kickoffTime)) {
+        return false;
+      }
+
+      if (kickoffTime <= referenceTime) {
+        return false;
+      }
+
+      return match.statusState === "pre" || !match.completed;
+    })
+    .sort((a, b) => {
+      return new Date(a.kickoffUtc).getTime() - new Date(b.kickoffUtc).getTime();
+    })[0];
+}
+
+function buildEspnNextMatchText(nextMatch: ParsedEspnMatch) {
   const kickoffUnix = Math.floor(new Date(nextMatch.kickoffUtc).getTime() / 1000);
 
   return [
     `**${versusLine(nextMatch.homeTeam, nextMatch.awayTeam)}**`,
-    `Group ${nextMatch.group} • ${nextMatch.venue}`,
     `Kickoff: <t:${kickoffUnix}:F>`
   ].join("\n");
+}
+
+function buildLocalNextMatchText(nextMatch: ScheduleMatch) {
+  const kickoffUnix = Math.floor(new Date(nextMatch.kickoffUtc).getTime() / 1000);
+
+  return [
+    `**${versusLine(nextMatch.homeTeam, nextMatch.awayTeam)}**`,
+    `${getScheduleStageLabel(nextMatch)} • ${nextMatch.venue}`,
+    `Kickoff: <t:${kickoffUnix}:F>`
+  ].join("\n");
+}
+
+function buildNextMatchText(
+  match: ParsedEspnMatch,
+  allMatches: ParsedEspnMatch[]
+) {
+  const espnNextMatch = getNextEspnMatch(match, allMatches);
+
+  if (espnNextMatch) {
+    return buildEspnNextMatchText(espnNextMatch);
+  }
+
+  const nextMatch = getNextScheduledMatch(match);
+
+  if (!nextMatch) {
+    return "No upcoming World Cup match found.";
+  }
+
+  return buildLocalNextMatchText(nextMatch);
 }
 
 async function sendToResultsChannel(
@@ -541,7 +594,10 @@ function buildHalfTimeEmbed(match: ParsedEspnMatch) {
     .setDescription(`**${scoreLine(match)}**`);
 }
 
-function buildFullTimeEmbed(match: ParsedEspnMatch) {
+function buildFullTimeEmbed(
+  match: ParsedEspnMatch,
+  allMatches: ParsedEspnMatch[]
+) {
   const sections = [
     `**${scoreLine(match)}**`,
     "",
@@ -560,7 +616,7 @@ function buildFullTimeEmbed(match: ParsedEspnMatch) {
   sections.push(
     "",
     "## ⏭️ Next Match",
-    buildNextMatchText(match)
+    buildNextMatchText(match, allMatches)
   );
 
   return new EmbedBuilder()
@@ -604,7 +660,11 @@ async function createInitialState(match: ParsedEspnMatch) {
   );
 }
 
-async function processMatch(client: Client, match: ParsedEspnMatch) {
+async function processMatch(
+  client: Client,
+  match: ParsedEspnMatch,
+  allMatches: ParsedEspnMatch[]
+) {
   let state = await EspnLiveState.findOne({
     espnId: match.espnId
   });
@@ -709,7 +769,7 @@ async function processMatch(client: Client, match: ParsedEspnMatch) {
     !state.fullTimePosted;
 
   if (shouldPostFullTime) {
-    await sendToResultsChannel(client, buildFullTimeEmbed(match));
+    await sendToResultsChannel(client, buildFullTimeEmbed(match, allMatches));
     state.fullTimePosted = true;
   }
 
@@ -731,7 +791,7 @@ async function checkEspnMatches(client: Client) {
     } = await fetchMatchesForWatcher();
 
     for (const match of matches) {
-      await processMatch(client, match);
+      await processMatch(client, match, matches);
     }
 
     const matchNames = matches

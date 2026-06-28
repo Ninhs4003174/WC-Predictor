@@ -1,7 +1,19 @@
 import type { GroupKey } from "./worldCupGroups.js";
 
+export type ScheduleStage =
+  | "group"
+  | "r32"
+  | "r16"
+  | "qf"
+  | "sf"
+  | "third"
+  | "final";
+
 export type ScheduleMatch = {
-  group: GroupKey;
+  group?: GroupKey;
+  stage?: ScheduleStage;
+  stageLabel?: string;
+  matchNumber?: number;
   homeTeam: string;
   awayTeam: string;
   venue: string;
