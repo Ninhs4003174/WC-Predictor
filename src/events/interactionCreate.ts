@@ -10,6 +10,7 @@ import {
   getCurrentPredictionStep,
   getRoundMatches,
   getRoundWinnersObject,
+  getThirdPlace,
   getWinnersFromRounds,
   hasKnockoutStarted,
   isKnockoutComplete,
@@ -58,7 +59,8 @@ async function getOrCreatePrediction(guildId: string, userId: string) {
         userId,
         rounds: {},
         completed: false,
-        champion: null
+        champion: null,
+        thirdPlace: null
       }
     },
     {
@@ -177,6 +179,7 @@ async function handleWinnerPick(interaction: Interaction) {
 
   const completed = isKnockoutComplete(rounds);
   const champion = getChampion(rounds);
+  const thirdPlace = getThirdPlace(rounds);
 
   await KnockoutPrediction.findOneAndUpdate(
     {
@@ -187,7 +190,8 @@ async function handleWinnerPick(interaction: Interaction) {
       $set: {
         rounds,
         completed,
-        champion
+        champion,
+        thirdPlace
       }
     },
     {
@@ -311,7 +315,8 @@ export async function handlePlayInteraction(
         $set: {
           rounds: {},
           completed: false,
-          champion: null
+          champion: null,
+          thirdPlace: null
         }
       },
       {

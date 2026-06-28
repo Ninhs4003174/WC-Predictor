@@ -4,6 +4,7 @@ import {
   getChampion,
   getRoundMatches,
   getRoundWinnersObject,
+  getThirdPlace,
   getWinnersFromRounds,
   isKnockoutComplete,
   ROUND_LABELS,
@@ -11,13 +12,15 @@ import {
   ROUND_POINTS,
   teamWithFlag,
   TOTAL_KNOCKOUT_PICKS,
-  type KnockoutRoundsLike
+  type KnockoutRoundsLike,
+  type RoundId
 } from "../data/knockoutBracket.js";
 
 export type KnockoutPredictionSummary = {
   rounds: KnockoutRoundsLike;
   completed?: boolean;
   champion?: string | null;
+  thirdPlace?: string | null;
 };
 
 type BuildKnockoutPredictionsEmbedOptions = {
@@ -26,7 +29,7 @@ type BuildKnockoutPredictionsEmbedOptions = {
   title?: string;
 };
 
-function buildRoundSummary(rounds: KnockoutRoundsLike, roundId: typeof ROUND_ORDER[number]) {
+function buildRoundSummary(rounds: KnockoutRoundsLike, roundId: RoundId) {
   const matches = getRoundMatches(roundId, rounds);
   const winners = getWinnersFromRounds(rounds, roundId);
 
@@ -60,6 +63,7 @@ export function buildKnockoutPredictionsSummaryEmbed({
 }: BuildKnockoutPredictionsEmbedOptions) {
   const rounds = getRoundWinnersObject(prediction?.rounds);
   const champion = getChampion(rounds);
+  const thirdPlace = getThirdPlace(rounds);
   const completed = isKnockoutComplete(rounds);
   const picksMade = countSavedPicks(rounds);
 
@@ -68,6 +72,9 @@ export function buildKnockoutPredictionsSummaryEmbed({
     completed && champion
       ? `Champion: **${teamWithFlag(champion)}**`
       : "Champion: Not decided yet",
+    thirdPlace
+      ? `Third place: **${teamWithFlag(thirdPlace)}**`
+      : "Third place: Not decided yet",
     "",
     "## Scoring",
     ROUND_ORDER

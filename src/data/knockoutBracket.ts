@@ -1,4 +1,4 @@
-export type RoundId = "r32" | "r16" | "qf" | "sf" | "final";
+export type RoundId = "r32" | "r16" | "qf" | "sf" | "third" | "final";
 
 export type KnockoutMatch = {
   id: string;
@@ -20,6 +20,7 @@ export const ROUND_ORDER: RoundId[] = [
   "r16",
   "qf",
   "sf",
+  "third",
   "final"
 ];
 
@@ -28,6 +29,7 @@ export const ROUND_LABELS: Record<RoundId, string> = {
   r16: "Round of 16",
   qf: "Quarter-finals",
   sf: "Semi-finals",
+  third: "Third-place playoff",
   final: "Final"
 };
 
@@ -36,40 +38,14 @@ export const ROUND_POINTS: Record<RoundId, number> = {
   r16: 20,
   qf: 30,
   sf: 40,
+  third: 50,
   final: 50
 };
 
-export const TOTAL_KNOCKOUT_PICKS = 31;
+export const TOTAL_KNOCKOUT_PICKS = 32;
 
 export const FIRST_KNOCKOUT_KICKOFF_UTC = "2026-06-28T19:00:00Z";
 
-/**
- * IMPORTANT:
- * This is NOT chronological order.
- *
- * This order is arranged so our simple bracket builder, which pairs
- * consecutive winners, follows the real FIFA bracket path:
- *
- * R16:
- * 89 = 73 vs 75
- * 90 = 74 vs 77
- * 93 = 83 vs 84
- * 94 = 81 vs 82
- * 91 = 76 vs 78
- * 92 = 79 vs 80
- * 95 = 86 vs 88
- * 96 = 85 vs 87
- *
- * QF:
- * 97 = 89 vs 90
- * 98 = 93 vs 94
- * 99 = 91 vs 92
- * 100 = 95 vs 96
- *
- * SF:
- * 101 = 97 vs 98
- * 102 = 99 vs 100
- */
 export const ROUND_OF_32_MATCHES: KnockoutMatch[] = [
   {
     id: "match-73",
@@ -83,7 +59,6 @@ export const ROUND_OF_32_MATCHES: KnockoutMatch[] = [
     homeTeam: "Netherlands",
     awayTeam: "Morocco"
   },
-
   {
     id: "match-74",
     matchNumber: 74,
@@ -96,7 +71,6 @@ export const ROUND_OF_32_MATCHES: KnockoutMatch[] = [
     homeTeam: "France",
     awayTeam: "Sweden"
   },
-
   {
     id: "match-83",
     matchNumber: 83,
@@ -109,7 +83,6 @@ export const ROUND_OF_32_MATCHES: KnockoutMatch[] = [
     homeTeam: "Spain",
     awayTeam: "Austria"
   },
-
   {
     id: "match-81",
     matchNumber: 81,
@@ -122,7 +95,6 @@ export const ROUND_OF_32_MATCHES: KnockoutMatch[] = [
     homeTeam: "Belgium",
     awayTeam: "Senegal"
   },
-
   {
     id: "match-76",
     matchNumber: 76,
@@ -135,7 +107,6 @@ export const ROUND_OF_32_MATCHES: KnockoutMatch[] = [
     homeTeam: "Ivory Coast",
     awayTeam: "Norway"
   },
-
   {
     id: "match-79",
     matchNumber: 79,
@@ -148,7 +119,6 @@ export const ROUND_OF_32_MATCHES: KnockoutMatch[] = [
     homeTeam: "England",
     awayTeam: "DR Congo"
   },
-
   {
     id: "match-86",
     matchNumber: 86,
@@ -161,7 +131,6 @@ export const ROUND_OF_32_MATCHES: KnockoutMatch[] = [
     homeTeam: "Australia",
     awayTeam: "Egypt"
   },
-
   {
     id: "match-85",
     matchNumber: 85,
@@ -274,6 +243,10 @@ export function getRoundWinnersObject(rounds: KnockoutRoundsLike): KnockoutRound
 }
 
 export function getPreviousRoundId(roundId: RoundId): RoundId | null {
+  if (roundId === "third" || roundId === "final") {
+    return "sf";
+  }
+
   const index = ROUND_ORDER.indexOf(roundId);
 
   if (index <= 0) {
@@ -307,12 +280,74 @@ function buildMatchesFromWinners(
   return matches;
 }
 
+function getLosersFromRound(
+  rounds: KnockoutRoundsLike,
+  roundId: RoundId
+): string[] {
+  const matches = getRoundMatches(roundId, rounds);
+  const winners = getWinnersFromRounds(rounds, roundId);
+
+  if (matches.length === 0 || winners.length !== matches.length) {
+    return [];
+  }
+
+  return matches
+    .map((match, index) => {
+      const winner = winners[index];
+
+      if (winner === match.homeTeam) {
+        return match.awayTeam;
+      }
+
+      if (winner === match.awayTeam) {
+        return match.homeTeam;
+      }
+
+      return null;
+    })
+    .filter((team): team is string => Boolean(team));
+}
+
 export function getRoundMatches(
   roundId: RoundId,
   rounds: KnockoutRoundsLike
 ): KnockoutMatch[] {
   if (roundId === "r32") {
     return ROUND_OF_32_MATCHES;
+  }
+
+  if (roundId === "third") {
+    const semiFinalLosers = getLosersFromRound(rounds, "sf");
+
+    if (semiFinalLosers.length !== 2) {
+      return [];
+    }
+
+    return [
+      {
+        id: "match-103",
+        matchNumber: 103,
+        homeTeam: semiFinalLosers[0],
+        awayTeam: semiFinalLosers[1]
+      }
+    ];
+  }
+
+  if (roundId === "final") {
+    const semiFinalWinners = getWinnersFromRounds(rounds, "sf");
+
+    if (semiFinalWinners.length !== 2) {
+      return [];
+    }
+
+    return [
+      {
+        id: "match-104",
+        matchNumber: 104,
+        homeTeam: semiFinalWinners[0],
+        awayTeam: semiFinalWinners[1]
+      }
+    ];
   }
 
   const previousRoundId = getPreviousRoundId(roundId);
@@ -364,9 +399,16 @@ export function countKnockoutPicks(rounds: KnockoutRoundsLike) {
 }
 
 export function isKnockoutComplete(rounds: KnockoutRoundsLike) {
-  return getWinnersFromRounds(rounds, "final").length === 1;
+  return (
+    getWinnersFromRounds(rounds, "third").length === 1 &&
+    getWinnersFromRounds(rounds, "final").length === 1
+  );
 }
 
 export function getChampion(rounds: KnockoutRoundsLike) {
   return getWinnersFromRounds(rounds, "final")[0] ?? null;
+}
+
+export function getThirdPlace(rounds: KnockoutRoundsLike) {
+  return getWinnersFromRounds(rounds, "third")[0] ?? null;
 }

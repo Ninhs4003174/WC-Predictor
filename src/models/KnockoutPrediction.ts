@@ -6,6 +6,7 @@ export interface IKnockoutPrediction {
   rounds: Map<string, string[]>;
   completed: boolean;
   champion?: string | null;
+  thirdPlace?: string | null;
 }
 
 const KnockoutPredictionSchema = new Schema<IKnockoutPrediction>(
@@ -32,6 +33,11 @@ const KnockoutPredictionSchema = new Schema<IKnockoutPrediction>(
     },
 
     champion: {
+      type: String,
+      default: null
+    },
+
+    thirdPlace: {
       type: String,
       default: null
     }
