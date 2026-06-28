@@ -2,6 +2,7 @@ export type RoundId = "r32" | "r16" | "qf" | "sf" | "final";
 
 export type KnockoutMatch = {
   id: string;
+  matchNumber?: number;
   homeTeam: string;
   awayTeam: string;
 };
@@ -42,84 +43,134 @@ export const TOTAL_KNOCKOUT_PICKS = 31;
 
 export const FIRST_KNOCKOUT_KICKOFF_UTC = "2026-06-28T19:00:00Z";
 
+/**
+ * IMPORTANT:
+ * This is NOT chronological order.
+ *
+ * This order is arranged so our simple bracket builder, which pairs
+ * consecutive winners, follows the real FIFA bracket path:
+ *
+ * R16:
+ * 89 = 73 vs 75
+ * 90 = 74 vs 77
+ * 93 = 83 vs 84
+ * 94 = 81 vs 82
+ * 91 = 76 vs 78
+ * 92 = 79 vs 80
+ * 95 = 86 vs 88
+ * 96 = 85 vs 87
+ *
+ * QF:
+ * 97 = 89 vs 90
+ * 98 = 93 vs 94
+ * 99 = 91 vs 92
+ * 100 = 95 vs 96
+ *
+ * SF:
+ * 101 = 97 vs 98
+ * 102 = 99 vs 100
+ */
 export const ROUND_OF_32_MATCHES: KnockoutMatch[] = [
   {
-    id: "r32-1",
+    id: "match-73",
+    matchNumber: 73,
     homeTeam: "South Africa",
     awayTeam: "Canada"
   },
   {
-    id: "r32-2",
+    id: "match-75",
+    matchNumber: 75,
     homeTeam: "Netherlands",
     awayTeam: "Morocco"
   },
+
   {
-    id: "r32-3",
+    id: "match-74",
+    matchNumber: 74,
     homeTeam: "Germany",
     awayTeam: "Paraguay"
   },
   {
-    id: "r32-4",
+    id: "match-77",
+    matchNumber: 77,
     homeTeam: "France",
     awayTeam: "Sweden"
   },
+
   {
-    id: "r32-5",
-    homeTeam: "Brazil",
-    awayTeam: "Japan"
-  },
-  {
-    id: "r32-6",
-    homeTeam: "Ivory Coast",
-    awayTeam: "Norway"
-  },
-  {
-    id: "r32-7",
-    homeTeam: "Mexico",
-    awayTeam: "Ecuador"
-  },
-  {
-    id: "r32-8",
-    homeTeam: "England",
-    awayTeam: "Congo DR"
-  },
-  {
-    id: "r32-9",
-    homeTeam: "Belgium",
-    awayTeam: "Senegal"
-  },
-  {
-    id: "r32-10",
-    homeTeam: "United States",
-    awayTeam: "Bosnia and Herzegovina"
-  },
-  {
-    id: "r32-11",
-    homeTeam: "Spain",
-    awayTeam: "Austria"
-  },
-  {
-    id: "r32-12",
+    id: "match-83",
+    matchNumber: 83,
     homeTeam: "Portugal",
     awayTeam: "Croatia"
   },
   {
-    id: "r32-13",
-    homeTeam: "Australia",
-    awayTeam: "Egypt"
+    id: "match-84",
+    matchNumber: 84,
+    homeTeam: "Spain",
+    awayTeam: "Austria"
+  },
+
+  {
+    id: "match-81",
+    matchNumber: 81,
+    homeTeam: "United States",
+    awayTeam: "Bosnia and Herzegovina"
   },
   {
-    id: "r32-14",
+    id: "match-82",
+    matchNumber: 82,
+    homeTeam: "Belgium",
+    awayTeam: "Senegal"
+  },
+
+  {
+    id: "match-76",
+    matchNumber: 76,
+    homeTeam: "Brazil",
+    awayTeam: "Japan"
+  },
+  {
+    id: "match-78",
+    matchNumber: 78,
+    homeTeam: "Ivory Coast",
+    awayTeam: "Norway"
+  },
+
+  {
+    id: "match-79",
+    matchNumber: 79,
+    homeTeam: "Mexico",
+    awayTeam: "Ecuador"
+  },
+  {
+    id: "match-80",
+    matchNumber: 80,
+    homeTeam: "England",
+    awayTeam: "DR Congo"
+  },
+
+  {
+    id: "match-86",
+    matchNumber: 86,
     homeTeam: "Argentina",
     awayTeam: "Cape Verde"
   },
   {
-    id: "r32-15",
+    id: "match-88",
+    matchNumber: 88,
+    homeTeam: "Australia",
+    awayTeam: "Egypt"
+  },
+
+  {
+    id: "match-85",
+    matchNumber: 85,
     homeTeam: "Switzerland",
     awayTeam: "Algeria"
   },
   {
-    id: "r32-16",
+    id: "match-87",
+    matchNumber: 87,
     homeTeam: "Colombia",
     awayTeam: "Ghana"
   }
