@@ -9,10 +9,19 @@ import {
 } from "discord.js";
 
 import {
+  countKnockoutPicks,
+  getChampion,
+  hasKnockoutStarted,
+  teamWithFlag,
+  TOTAL_KNOCKOUT_PICKS
+} from "../data/knockoutBracket.js";
+
+import {
   GROUP_ORDER,
   type GroupKey
 } from "../data/worldCupGroups.js";
 
+import { KnockoutPrediction } from "../models/KnockoutPrediction.js";
 import { MatchPrediction } from "../models/MatchPrediction.js";
 
 import {
@@ -34,12 +43,16 @@ export const data = new SlashCommandBuilder()
       .setRequired(true)
       .addChoices(
         {
-          name: "Group predictions",
-          value: "group"
+          name: "Knockout predictions",
+          value: "knockout"
         },
         {
           name: "Match predictions",
           value: "match"
+        },
+        {
+          name: "Group predictions legacy",
+          value: "group"
         }
       )
   )
@@ -103,6 +116,103 @@ function getPageSlice<T>(items: T[], page: number) {
   const start = page * PAGE_SIZE;
 
   return items.slice(start, start + PAGE_SIZE);
+}
+
+async function buildKnockoutStatusPage(
+  guildId: string,
+  page: number
+): Promise<StatusPagePayload> {
+  const predictionDocs = await KnockoutPrediction.find({
+    guildId
+  });
+
+  const userProgress = predictionDocs
+    .map(prediction => {
+      const picksMade = countKnockoutPicks(prediction.rounds);
+      const champion = getChampion(prediction.rounds);
+
+      return {
+        userId: prediction.userId,
+        picksMade,
+        completed: prediction.completed,
+        champion
+      };
+    })
+    .filter(user => user.picksMade > 0)
+    .sort((a, b) => {
+      if (b.picksMade !== a.picksMade) {
+        return b.picksMade - a.picksMade;
+      }
+
+      return a.userId.localeCompare(b.userId);
+    });
+
+  const totalEntrants = userProgress.length;
+  const completedUsers = userProgress.filter(user => user.completed);
+  const inProgressUsers = userProgress.filter(user => !user.completed);
+
+  const totalPicks = userProgress.reduce((total, user) => {
+    return total + user.picksMade;
+  }, 0);
+
+  const maxPossiblePicks = totalEntrants * TOTAL_KNOCKOUT_PICKS;
+
+  const completionPercent =
+    maxPossiblePicks === 0
+      ? 0
+      : Math.round((totalPicks / maxPossiblePicks) * 100);
+
+  const totalPages = Math.max(1, Math.ceil(userProgress.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+  const pageUsers = getPageSlice(userProgress, safePage);
+
+  const userList =
+    pageUsers.length === 0
+      ? "No knockout predictions submitted yet."
+      : pageUsers
+          .map((user, index) => {
+            const rank = safePage * PAGE_SIZE + index + 1;
+            const status = user.completed ? "✅ complete" : "🟡 in progress";
+            const championText = user.champion
+              ? ` — Champion: **${teamWithFlag(user.champion)}**`
+              : "";
+
+            return `**${rank}.** <@${user.userId}> \`${user.userId}\` — **${user.picksMade}/${TOTAL_KNOCKOUT_PICKS}** picks ${status}${championText}`;
+          })
+          .join("\n");
+
+  const lockText = hasKnockoutStarted()
+    ? "🔒 Locked"
+    : "🔓 Open";
+
+  const embed = new EmbedBuilder()
+    .setTitle("🏆 Knockout Prediction Status")
+    .setDescription(
+      [
+        "A user counts as **entered** once they submit at least one knockout pick.",
+        "",
+        `👥 **Total Entrants:** ${totalEntrants}`,
+        `✅ **Completed Entries:** ${completedUsers.length}`,
+        `🟡 **In Progress:** ${inProgressUsers.length}`,
+        `🏆 **Picks Submitted:** ${totalPicks}/${maxPossiblePicks}`,
+        `📊 **Overall Completion:** ${completionPercent}%`,
+        `🔐 **Lock Status:** ${lockText}`
+      ].join("\n")
+    )
+    .addFields({
+      name: `👤 Users / User IDs — Page ${safePage + 1}/${totalPages}`,
+      value: userList,
+      inline: false
+    })
+    .setFooter({
+      text: "Knockout predictions count once a winner is selected"
+    })
+    .setTimestamp();
+
+  return {
+    embed,
+    totalPages
+  };
 }
 
 async function buildGroupStatusPage(
@@ -175,7 +285,7 @@ async function buildGroupStatusPage(
           .join("\n");
 
   const embed = new EmbedBuilder()
-    .setTitle("🌍 Group Prediction Status")
+    .setTitle("🌍 Group Prediction Status Legacy")
     .setDescription(
       [
         "A user counts as **entered** once they submit at least one group.",
@@ -200,7 +310,7 @@ async function buildGroupStatusPage(
       }
     )
     .setFooter({
-      text: "Group predictions count once a group is submitted"
+      text: "Legacy group predictions"
     })
     .setTimestamp();
 
@@ -301,6 +411,10 @@ async function buildStatusPage(
   guildId: string,
   page: number
 ) {
+  if (type === "knockout") {
+    return buildKnockoutStatusPage(guildId, page);
+  }
+
   if (type === "group") {
     return buildGroupStatusPage(guildId, page);
   }

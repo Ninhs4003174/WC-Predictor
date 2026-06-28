@@ -1,16 +1,15 @@
-import type { GroupKey } from "../data/worldCupGroups.js";
-
-export type PositionKey = "first" | "second" | "third" | "fourth";
+import type { RoundId } from "../data/knockoutBracket.js";
 
 export type PlayMode = "play" | "edit";
 
-export type GroupDraft = {
-  group: GroupKey;
+export type KnockoutDraft = {
+  type: "knockout";
   mode: PlayMode;
-  picks: Partial<Record<PositionKey, string>>;
+  roundId: RoundId;
+  matchIndex: number;
 };
 
-const sessions = new Map<string, GroupDraft>();
+const sessions = new Map<string, KnockoutDraft>();
 
 export function getSessionKey(guildId: string, userId: string) {
   return `${guildId}:${userId}`;
@@ -20,7 +19,11 @@ export function getSession(guildId: string, userId: string) {
   return sessions.get(getSessionKey(guildId, userId));
 }
 
-export function setSession(guildId: string, userId: string, draft: GroupDraft) {
+export function setSession(
+  guildId: string,
+  userId: string,
+  draft: KnockoutDraft
+) {
   sessions.set(getSessionKey(guildId, userId), draft);
 }
 

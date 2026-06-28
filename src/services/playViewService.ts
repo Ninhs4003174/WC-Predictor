@@ -2,78 +2,71 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
-  StringSelectMenuBuilder
+  EmbedBuilder
 } from "discord.js";
 
-import type { GroupKey } from "../data/worldCupGroups.js";
-
 import {
-  WORLD_CUP_GROUPS,
-  getTeamDisplayName
-} from "../data/worldCupGroups.js";
+  countKnockoutPicks,
+  ROUND_LABELS,
+  ROUND_POINTS,
+  teamWithFlag,
+  TOTAL_KNOCKOUT_PICKS,
+  type KnockoutMatch,
+  type KnockoutRoundsLike,
+  type RoundId
+} from "../data/knockoutBracket.js";
 
-import type { PositionKey } from "../utils/playSessions.js";
+type BuildKnockoutPredictionPayloadOptions = {
+  roundId: RoundId;
+  matchIndex: number;
+  match: KnockoutMatch;
+  matches: KnockoutMatch[];
+  rounds: KnockoutRoundsLike;
+  note?: string;
+};
 
-function createPositionSelect(
-  group: GroupKey,
-  position: PositionKey,
-  placeholder: string
-) {
-  const teams = WORLD_CUP_GROUPS[group];
-
-  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(`wc_pick:${group}:${position}`)
-      .setPlaceholder(placeholder)
-      .addOptions(
-        teams.map(team => ({
-          label: team,
-          value: team
-        }))
-      )
-  );
-}
-
-export function buildGroupPredictionPayload(group: GroupKey) {
-  const teams = WORLD_CUP_GROUPS[group];
+export function buildKnockoutPredictionPayload({
+  roundId,
+  matchIndex,
+  match,
+  matches,
+  rounds,
+  note
+}: BuildKnockoutPredictionPayloadOptions) {
+  const picksMade = countKnockoutPicks(rounds);
 
   const embed = new EmbedBuilder()
-    .setTitle(`🌍 World Cup Predictor — Group ${group}`)
+    .setTitle(`🏆 World Cup Predictor — ${ROUND_LABELS[roundId]}`)
     .setDescription(
       [
-        `Predict the full finishing order for **Group ${group}**.`,
+        note ? `${note}\n` : null,
+        `Pick the winner for **${ROUND_LABELS[roundId]} Match ${matchIndex + 1}/${matches.length}**.`,
         "",
-        teams.map(team => `• ${getTeamDisplayName(team)}`).join("\n"),
+        `Correct winner this round: **${ROUND_POINTS[roundId]} points**`,
         "",
-        "**Scoring later:**",
-        "Exact position = 5 pts",
-        "1 position off = 2 pts",
+        `## ${teamWithFlag(match.homeTeam)} vs ${teamWithFlag(match.awayTeam)}`,
         "",
-        "Choose 1st, 2nd, 3rd and 4th below, then press **Submit Group**."
-      ].join("\n")
+        `Progress: **${picksMade}/${TOTAL_KNOCKOUT_PICKS}** picks made.`,
+        "",
+        "Choose the team you think will advance."
+      ]
+        .filter(Boolean)
+        .join("\n")
     );
 
-  const firstRow = createPositionSelect(group, "first", "Pick 1st place");
-  const secondRow = createPositionSelect(group, "second", "Pick 2nd place");
-  const thirdRow = createPositionSelect(group, "third", "Pick 3rd place");
-  const fourthRow = createPositionSelect(group, "fourth", "Pick 4th place");
-
-  const submitRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(`wc_submit:${group}`)
-      .setLabel(`Submit Group ${group}`)
-      .setStyle(ButtonStyle.Success)
+      .setCustomId(`ko_pick:${roundId}:${matchIndex}:home`)
+      .setLabel(match.homeTeam)
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`ko_pick:${roundId}:${matchIndex}:away`)
+      .setLabel(match.awayTeam)
+      .setStyle(ButtonStyle.Primary)
   );
 
   return {
     embeds: [embed],
-    components: [
-      firstRow,
-      secondRow,
-      thirdRow,
-      fourthRow,
-      submitRow
-    ]
+    components: [row]
   };
 }

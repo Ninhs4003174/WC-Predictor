@@ -8,67 +8,72 @@ import {
 } from "discord.js";
 
 import {
-  GROUP_ORDER,
-  type GroupKey
-} from "../data/worldCupGroups.js";
+  countKnockoutPicks,
+  getCurrentPredictionStep,
+  hasKnockoutStarted,
+  TOTAL_KNOCKOUT_PICKS
+} from "../data/knockoutBracket.js";
 
-import { GuildSettings } from "../models/GuildSettings.js";
-import { WorldCupPrediction } from "../models/WorldCupPrediction.js";
-import { buildGroupPredictionPayload } from "../services/playViewService.js";
-import { setSession } from "../utils/playSessions.js";
+import { KnockoutPrediction } from "../models/KnockoutPrediction.js";
+import { buildKnockoutPredictionPayload } from "../services/playViewService.js";
+import { buildKnockoutPredictionsSummaryEmbed } from "../services/predictionsViewService.js";
 
 export const data = new SlashCommandBuilder()
   .setName("play")
-  .setDescription("Start your World Cup group predictions");
+  .setDescription("Start your World Cup knockout stage predictions");
 
-function hasAnyPredictions(predictions: Map<string, string[]> | undefined) {
-  if (!predictions) return false;
-
-  return GROUP_ORDER.some(group => {
-    return Boolean(predictions.get(group));
-  });
-}
-
-function buildExistingPredictionPayload(completed: boolean) {
+function buildExistingPredictionPayload({
+  completed,
+  locked,
+  picksMade
+}: {
+  completed: boolean;
+  locked: boolean;
+  picksMade: number;
+}) {
   const embed = new EmbedBuilder()
-    .setTitle("🌍 World Cup Predictor")
+    .setTitle("🏆 World Cup Knockout Predictor")
     .setDescription(
       completed
         ? [
-            "You have already completed your group predictions.",
+            "You have already completed your knockout bracket.",
             "",
-            "You can use `/predictions` to view or edit individual groups.",
-            "",
-            "Or you can restart everything from Group A."
+            "Use `/predictions` to view your saved bracket."
           ].join("\n")
         : [
-            "You already have predictions in progress.",
+            "You already have knockout predictions in progress.",
             "",
-            "You can continue where you left off, or restart everything from Group A."
+            `Progress: **${picksMade}/${TOTAL_KNOCKOUT_PICKS}** picks made.`,
+            "",
+            locked
+              ? "Predictions are now locked because the knockout stage has started."
+              : "You can continue where you left off, or restart your bracket."
           ].join("\n")
     );
 
   const row = new ActionRowBuilder<ButtonBuilder>();
 
-  if (!completed) {
+  if (!completed && !locked) {
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId("wc_continue_predictions")
+        .setCustomId("ko_continue_predictions")
         .setLabel("Continue Predictions")
         .setStyle(ButtonStyle.Primary)
     );
   }
 
-  row.addComponents(
-    new ButtonBuilder()
-      .setCustomId("wc_restart_predictions")
-      .setLabel("Restart Predictions")
-      .setStyle(ButtonStyle.Danger)
-  );
+  if (!locked) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId("ko_restart_predictions")
+        .setLabel("Restart Bracket")
+        .setStyle(ButtonStyle.Danger)
+    );
+  }
 
   return {
     embeds: [embed],
-    components: [row],
+    components: row.components.length > 0 ? [row] : [],
     ephemeral: true
   };
 }
@@ -82,45 +87,58 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const settings = await GuildSettings.findOne({
-    guildId: interaction.guildId
+  const locked = hasKnockoutStarted();
+
+  const existing = await KnockoutPrediction.findOne({
+    guildId: interaction.guildId,
+    userId: interaction.user.id
   });
 
-  if (settings?.picksLocked) {
+  const picksMade = countKnockoutPicks(existing?.rounds);
+
+  if (existing && picksMade > 0) {
+    await interaction.reply(
+      buildExistingPredictionPayload({
+        completed: existing.completed,
+        locked,
+        picksMade
+      })
+    );
+    return;
+  }
+
+  if (locked) {
     await interaction.reply({
-      content: "🔒 Picks are currently locked. You cannot start, continue, restart, edit, or submit predictions.",
+      content: "🔒 Knockout predictions are locked because the knockout stage has started.",
       ephemeral: true
     });
     return;
   }
 
-  const existing = await WorldCupPrediction.findOne({
-    guildId: interaction.guildId,
-    userId: interaction.user.id
-  });
+  const step = getCurrentPredictionStep(existing?.rounds);
 
-  const predictions = existing?.predictions;
-  const userHasPredictions = hasAnyPredictions(predictions);
+  if (!step) {
+    const embed = buildKnockoutPredictionsSummaryEmbed({
+      username: interaction.user.username,
+      prediction: existing,
+      title: "✅ Knockout predictions submitted"
+    });
 
-  if (existing && userHasPredictions) {
-    await interaction.reply(buildExistingPredictionPayload(existing.completed));
+    await interaction.reply({
+      embeds: [embed],
+      ephemeral: true
+    });
     return;
   }
 
-  const nextGroup = GROUP_ORDER.find(group => {
-    return !predictions?.get(group);
-  }) as GroupKey | undefined;
-
-  const groupToStart = nextGroup ?? "A";
-
-  setSession(interaction.guildId, interaction.user.id, {
-    group: groupToStart,
-    mode: "play",
-    picks: {}
-  });
-
   await interaction.reply({
-    ...buildGroupPredictionPayload(groupToStart),
+    ...buildKnockoutPredictionPayload({
+      roundId: step.roundId,
+      matchIndex: step.matchIndex,
+      match: step.match,
+      matches: step.matches,
+      rounds: existing?.rounds
+    }),
     ephemeral: true
   });
 }

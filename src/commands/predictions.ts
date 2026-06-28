@@ -7,14 +7,17 @@ import {
   SlashCommandBuilder
 } from "discord.js";
 
-import { GuildSettings } from "../models/GuildSettings.js";
-import { WorldCupPrediction } from "../models/WorldCupPrediction.js";
+import {
+  countKnockoutPicks,
+  hasKnockoutStarted
+} from "../data/knockoutBracket.js";
 
-import { buildPredictionsSummaryEmbed } from "../services/predictionsViewService.js";
+import { KnockoutPrediction } from "../models/KnockoutPrediction.js";
+import { buildKnockoutPredictionsSummaryEmbed } from "../services/predictionsViewService.js";
 
 export const data = new SlashCommandBuilder()
   .setName("predictions")
-  .setDescription("View saved World Cup group predictions")
+  .setDescription("View saved World Cup knockout predictions")
   .addUserOption(option =>
     option
       .setName("user")
@@ -31,11 +34,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const settings = await GuildSettings.findOne({
-    guildId: interaction.guildId
-  });
-
-  const picksLocked = Boolean(settings?.picksLocked);
+  const picksLocked = hasKnockoutStarted();
 
   const targetUser =
     interaction.options.getUser("user") ?? interaction.user;
@@ -48,20 +47,20 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (!isViewingOwnPredictions && !isAdmin && !picksLocked) {
     await interaction.reply({
-      content: "🔒 You cannot view other people's predictions until picks are locked.",
+      content: "🔒 You cannot view other people's knockout predictions until picks are locked.",
       ephemeral: true
     });
     return;
   }
 
-  const prediction = await WorldCupPrediction.findOne({
+  const prediction = await KnockoutPrediction.findOne({
     guildId: interaction.guildId,
     userId: targetUser.id
   });
 
-  if (!prediction) {
+  if (!prediction || countKnockoutPicks(prediction.rounds) === 0) {
     await interaction.reply({
-      content: `${targetUser.username} has not made any predictions yet.`,
+      content: `${targetUser.username} has not made any knockout predictions yet.`,
       ephemeral: true
     });
     return;
@@ -80,7 +79,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       ? " | Admin view"
       : "";
 
-  const embed = buildPredictionsSummaryEmbed({
+  const embed = buildKnockoutPredictionsSummaryEmbed({
     username: targetUser.username,
     prediction
   }).setFooter({
@@ -89,17 +88,17 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const components: ActionRowBuilder<ButtonBuilder>[] = [];
 
-  const canEdit = isViewingOwnPredictions && !picksLocked;
+  const canRestart = isViewingOwnPredictions && !picksLocked;
 
-  if (canEdit) {
-    const editRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId("wc_edit_predictions")
-        .setLabel("Edit Predictions")
-        .setStyle(ButtonStyle.Primary)
+  if (canRestart) {
+    components.push(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId("ko_restart_predictions")
+          .setLabel("Restart Bracket")
+          .setStyle(ButtonStyle.Danger)
+      )
     );
-
-    components.push(editRow);
   }
 
   await interaction.reply({

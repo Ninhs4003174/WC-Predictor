@@ -1,73 +1,91 @@
 import { EmbedBuilder } from "discord.js";
 
 import {
-  GROUP_ORDER,
-  getTeamDisplayName
-} from "../data/worldCupGroups.js";
+  getChampion,
+  getRoundMatches,
+  getRoundWinnersObject,
+  getWinnersFromRounds,
+  isKnockoutComplete,
+  ROUND_LABELS,
+  ROUND_ORDER,
+  ROUND_POINTS,
+  teamWithFlag,
+  TOTAL_KNOCKOUT_PICKS,
+  type KnockoutRoundsLike
+} from "../data/knockoutBracket.js";
 
-export type PredictionSummary = {
-  predictions: Map<string, string[]>;
+export type KnockoutPredictionSummary = {
+  rounds: KnockoutRoundsLike;
+  completed?: boolean;
+  champion?: string | null;
 };
 
-type BuildPredictionsEmbedOptions = {
+type BuildKnockoutPredictionsEmbedOptions = {
   username: string;
-  prediction: PredictionSummary | null | undefined;
+  prediction: KnockoutPredictionSummary | null | undefined;
   title?: string;
 };
 
-function buildGroupFieldValue(groupPicks: string[] | undefined) {
-  if (!groupPicks) {
-    return "Not predicted yet.";
+function buildRoundSummary(rounds: KnockoutRoundsLike, roundId: typeof ROUND_ORDER[number]) {
+  const matches = getRoundMatches(roundId, rounds);
+  const winners = getWinnersFromRounds(rounds, roundId);
+
+  if (matches.length === 0) {
+    return "Not available yet.";
   }
 
-  return [
-    `**1.** ${getTeamDisplayName(groupPicks[0])}`,
-    `**2.** ${getTeamDisplayName(groupPicks[1])}`,
-    `**3.** ${getTeamDisplayName(groupPicks[2])}`,
-    `**4.** ${getTeamDisplayName(groupPicks[3])}`
-  ].join("\n");
+  return matches
+    .map((match, index) => {
+      const winner = winners[index];
+
+      if (!winner) {
+        return `**${index + 1}.** ${teamWithFlag(match.homeTeam)} vs ${teamWithFlag(match.awayTeam)} → Not picked yet`;
+      }
+
+      return `**${index + 1}.** ${teamWithFlag(match.homeTeam)} vs ${teamWithFlag(match.awayTeam)} → **${teamWithFlag(winner)}**`;
+    })
+    .join("\n");
 }
 
-export function buildPredictionsSummaryEmbed({
+function countSavedPicks(rounds: KnockoutRoundsLike) {
+  return ROUND_ORDER.reduce((total, roundId) => {
+    return total + getWinnersFromRounds(rounds, roundId).length;
+  }, 0);
+}
+
+export function buildKnockoutPredictionsSummaryEmbed({
   username,
   prediction,
   title
-}: BuildPredictionsEmbedOptions) {
-  const embed = new EmbedBuilder()
-    .setTitle(title ?? `📋 ${username}'s World Cup Predictions`);
+}: BuildKnockoutPredictionsEmbedOptions) {
+  const rounds = getRoundWinnersObject(prediction?.rounds);
+  const champion = getChampion(rounds);
+  const completed = isKnockoutComplete(rounds);
+  const picksMade = countSavedPicks(rounds);
 
-  const fields = [];
+  const sections = [
+    `Progress: **${Math.min(picksMade, TOTAL_KNOCKOUT_PICKS)}/${TOTAL_KNOCKOUT_PICKS}** picks`,
+    completed && champion
+      ? `Champion: **${teamWithFlag(champion)}**`
+      : "Champion: Not decided yet",
+    "",
+    "## Scoring",
+    ROUND_ORDER
+      .map(roundId => {
+        return `**${ROUND_LABELS[roundId]}:** ${ROUND_POINTS[roundId]} points per correct winner`;
+      })
+      .join("\n")
+  ];
 
-  for (let i = 0; i < GROUP_ORDER.length; i += 2) {
-    const firstGroup = GROUP_ORDER[i];
-    const secondGroup = GROUP_ORDER[i + 1];
-
-    const firstGroupPicks = prediction?.predictions.get(firstGroup);
-
-    fields.push({
-      name: `Group ${firstGroup}`,
-      value: buildGroupFieldValue(firstGroupPicks),
-      inline: true
-    });
-
-    if (secondGroup) {
-      const secondGroupPicks = prediction?.predictions.get(secondGroup);
-
-      fields.push({
-        name: `Group ${secondGroup}`,
-        value: buildGroupFieldValue(secondGroupPicks),
-        inline: true
-      });
-    }
-
-    fields.push({
-      name: "\u200B",
-      value: "\u200B",
-      inline: true
-    });
+  for (const roundId of ROUND_ORDER) {
+    sections.push(
+      "",
+      `## ${ROUND_LABELS[roundId]}`,
+      buildRoundSummary(rounds, roundId)
+    );
   }
 
-  embed.addFields(fields);
-
-  return embed;
+  return new EmbedBuilder()
+    .setTitle(title ?? `🏆 ${username}'s Knockout Predictions`)
+    .setDescription(sections.join("\n"));
 }
