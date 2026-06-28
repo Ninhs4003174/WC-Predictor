@@ -1,6 +1,6 @@
 import type { GroupKey } from "./worldCupGroups.js";
 
-export const EXACT_POSITION_POINTS = 3;
+export const EXACT_POSITION_POINTS = 5;
 export const ONE_POSITION_AWAY_POINTS = 2;
 
 export const ACTUAL_GROUP_STANDINGS: Record<GroupKey, string[]> = {
