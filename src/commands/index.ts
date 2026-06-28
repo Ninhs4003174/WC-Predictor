@@ -7,6 +7,7 @@ import type {
 import * as ping from "./ping.js";
 import * as play from "./play.js";
 import * as predictions from "./predictions.js";
+import * as leaderboard from "./leaderboard.js";
 import * as schedule from "./schedule.js";
 import * as matchpredictions from "./matchpredictions.js";
 import * as lockpicks from "./lockpicks.js";
@@ -26,6 +27,7 @@ export const commands: BotCommand[] = [
   ping,
   play,
   predictions,
+  leaderboard,
   schedule,
   matchpredictions,
   lockpicks,
