@@ -328,6 +328,101 @@ function isSameScheduledMatch(
   return sameOrder || reversedOrder;
 }
 
+function getOfficialGoalTotal(match: ParsedEspnMatch) {
+  return Math.max(0, match.homeScore + match.awayScore);
+}
+
+function getNormalGoals(match: ParsedEspnMatch) {
+  const officialGoalTotal = getOfficialGoalTotal(match);
+
+  return match.goals.slice(0, officialGoalTotal);
+}
+
+function getPenaltyShootoutGoals(match: ParsedEspnMatch) {
+  const officialGoalTotal = getOfficialGoalTotal(match);
+
+  if (match.goals.length <= officialGoalTotal) {
+    return [];
+  }
+
+  return match.goals.slice(officialGoalTotal);
+}
+
+function hasPenaltyShootout(match: ParsedEspnMatch) {
+  return getPenaltyShootoutGoals(match).length > 0;
+}
+
+function getPenaltyShootoutScore(match: ParsedEspnMatch) {
+  let homeScore = 0;
+  let awayScore = 0;
+
+  for (const goal of getPenaltyShootoutGoals(match)) {
+    if (isSameTeam(goal.teamName, match.homeTeam)) {
+      homeScore += 1;
+    } else if (isSameTeam(goal.teamName, match.awayTeam)) {
+      awayScore += 1;
+    }
+  }
+
+  return {
+    homeScore,
+    awayScore
+  };
+}
+
+function getPenaltyShootoutScoreAfterGoal(
+  match: ParsedEspnMatch,
+  targetGoal: ParsedEspnGoal
+) {
+  let homeScore = 0;
+  let awayScore = 0;
+
+  const targetKey = goalKey(targetGoal);
+
+  for (const goal of getPenaltyShootoutGoals(match)) {
+    if (isSameTeam(goal.teamName, match.homeTeam)) {
+      homeScore += 1;
+    } else if (isSameTeam(goal.teamName, match.awayTeam)) {
+      awayScore += 1;
+    }
+
+    if (goalKey(goal) === targetKey) {
+      break;
+    }
+  }
+
+  return {
+    homeScore,
+    awayScore
+  };
+}
+
+function penaltyShootoutScoreLine(
+  match: ParsedEspnMatch,
+  homeScore: number,
+  awayScore: number
+) {
+  return `${teamWithFlag(match.homeTeam)} ${homeScore} - ${awayScore} ${teamWithFlag(match.awayTeam)}`;
+}
+
+function getPenaltyShootoutWinnerText(match: ParsedEspnMatch) {
+  const {
+    homeScore,
+    awayScore
+  } = getPenaltyShootoutScore(match);
+
+  if (homeScore === awayScore) {
+    return `Penalty shootout: **${penaltyShootoutScoreLine(match, homeScore, awayScore)}**`;
+  }
+
+  const winner =
+    homeScore > awayScore
+      ? match.homeTeam
+      : match.awayTeam;
+
+  return `**${teamWithFlag(winner)} win ${homeScore}-${awayScore} on penalties.**`;
+}
+
 function getScoreAfterGoal(
   match: ParsedEspnMatch,
   targetGoal: ParsedEspnGoal
@@ -337,7 +432,7 @@ function getScoreAfterGoal(
 
   const targetKey = goalKey(targetGoal);
 
-  for (const goal of match.goals) {
+  for (const goal of getNormalGoals(match)) {
     if (isSameTeam(goal.teamName, match.homeTeam)) {
       homeScore += 1;
     } else if (isSameTeam(goal.teamName, match.awayTeam)) {
@@ -383,6 +478,13 @@ function formatFullTimeGoal(goal: ParsedEspnGoal) {
   ].join("\n");
 }
 
+function formatPenaltyShootoutGoal(goal: ParsedEspnGoal) {
+  return [
+    `🥅 ${goal.scorer}`,
+    `Team: **${teamWithFlag(goal.teamName)}**`
+  ].join("\n");
+}
+
 function formatRedCard(card: ParsedEspnCard) {
   return [
     `🟥 **${card.minute}** — ${card.player}`,
@@ -391,12 +493,26 @@ function formatRedCard(card: ParsedEspnCard) {
 }
 
 function formatFullTimeGoals(match: ParsedEspnMatch) {
-  if (match.goals.length === 0) {
+  const normalGoals = getNormalGoals(match);
+
+  if (normalGoals.length === 0) {
     return "No goals.";
   }
 
-  return match.goals
+  return normalGoals
     .map(formatFullTimeGoal)
+    .join("\n\n");
+}
+
+function formatPenaltyShootoutGoals(match: ParsedEspnMatch) {
+  const shootoutGoals = getPenaltyShootoutGoals(match);
+
+  if (shootoutGoals.length === 0) {
+    return "No penalty shootout goals.";
+  }
+
+  return shootoutGoals
+    .map(formatPenaltyShootoutGoal)
     .join("\n\n");
 }
 
@@ -559,6 +675,39 @@ function buildGoalEmbed(match: ParsedEspnMatch, goal: ParsedEspnGoal) {
     );
 }
 
+function buildPenaltyShootoutStartedEmbed(match: ParsedEspnMatch) {
+  return new EmbedBuilder()
+    .setTitle("🥅 Penalty shootout")
+    .setDescription(
+      [
+        `**${scoreLine(match)}**`,
+        "",
+        "This match is being decided by penalties."
+      ].join("\n")
+    );
+}
+
+function buildPenaltyShootoutGoalEmbed(
+  match: ParsedEspnMatch,
+  goal: ParsedEspnGoal
+) {
+  const {
+    homeScore,
+    awayScore
+  } = getPenaltyShootoutScoreAfterGoal(match, goal);
+
+  return new EmbedBuilder()
+    .setTitle("🥅 Penalty shootout")
+    .setDescription(
+      [
+        `Shootout score: **${penaltyShootoutScoreLine(match, homeScore, awayScore)}**`,
+        "",
+        `Scored by: **${goal.scorer}**`,
+        `Team: **${teamWithFlag(goal.teamName)}**`
+      ].join("\n")
+    );
+}
+
 function buildRedCardEmbed(match: ParsedEspnMatch, card: ParsedEspnCard) {
   return new EmbedBuilder()
     .setTitle("🟥 Red Card")
@@ -598,12 +747,27 @@ function buildFullTimeEmbed(
   match: ParsedEspnMatch,
   allMatches: ParsedEspnMatch[]
 ) {
+  const hasShootout = hasPenaltyShootout(match);
+
   const sections = [
     `**${scoreLine(match)}**`,
-    "",
+    ""
+  ];
+
+  if (hasShootout) {
+    sections.push(
+      "## 🥅 Penalty Shootout",
+      getPenaltyShootoutWinnerText(match),
+      "",
+      formatPenaltyShootoutGoals(match),
+      ""
+    );
+  }
+
+  sections.push(
     "## ⚽ Goals",
     formatFullTimeGoals(match)
-  ];
+  );
 
   if (match.redCards.length > 0) {
     sections.push(
@@ -620,7 +784,7 @@ function buildFullTimeEmbed(
   );
 
   return new EmbedBuilder()
-    .setTitle("🏁 Full-time")
+    .setTitle(hasShootout ? "🏁 Full-time after penalties" : "🏁 Full-time")
     .setDescription(sections.join("\n"));
 }
 
@@ -737,13 +901,33 @@ async function processMatch(
     }
   }
 
-  for (const goal of match.goals) {
+  for (const goal of getNormalGoals(match)) {
     const key = goalKey(goal);
 
     if (!postedGoalKeys.has(key)) {
       await sendToResultsChannel(client, buildGoalEmbed(match, goal));
       postedGoalKeys.add(key);
     }
+  }
+
+  const shootoutGoals = getPenaltyShootoutGoals(match);
+  const hasAlreadyPostedShootoutGoal = shootoutGoals.some(goal => {
+    return postedGoalKeys.has(goalKey(goal));
+  });
+
+  const newShootoutGoals = shootoutGoals.filter(goal => {
+    return !postedGoalKeys.has(goalKey(goal));
+  });
+
+  if (newShootoutGoals.length > 0 && !hasAlreadyPostedShootoutGoal) {
+    await sendToResultsChannel(client, buildPenaltyShootoutStartedEmbed(match));
+  }
+
+  for (const goal of newShootoutGoals) {
+    const key = goalKey(goal);
+
+    await sendToResultsChannel(client, buildPenaltyShootoutGoalEmbed(match, goal));
+    postedGoalKeys.add(key);
   }
 
   for (const redCard of match.redCards) {
